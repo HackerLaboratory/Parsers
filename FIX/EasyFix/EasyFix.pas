@@ -12,6 +12,8 @@ type
   TFixValue = class;
 
   TBaseFix = class
+  private
+    FixList: TList;
   public
     constructor Create; overload;
     constructor Create(fixPkg: string); overload;
@@ -57,19 +59,30 @@ implementation
 constructor TBaseFix.Create;
 begin
   inherited;
+  FixList := TList.Create();
   sBuffer := '';
 end;
 
 constructor TBaseFix.Create(fixPkg: string);
 begin
   inherited Create;
+  FixList := TList.Create();
   sBuffer := SOH + fixPkg;
   sBuffer := StringReplace(sBuffer, ' ', '', [rfReplaceAll]);
 end;
 
 destructor TBaseFix.Destroy;
+var
+  aFixPkg: TBaseFix;
+  i: Integer;
 begin
   sBuffer := '';
+  for i:=0 to FixList.Count-1 do
+  begin
+    aFixPkg := FixList.Items[i];
+    aFixPkg.Free();
+  end;
+  FixList.Free();
   inherited;
 end;
 
@@ -99,24 +112,24 @@ begin
   Result := TFixValue.Create(searchBuffer);
   Result.SetKey(key);
   Result.SetValue(sValue);
+  
+  FixList.Add(Result);
 end;
 
 //返回值0表示没有搜索到
 function TBaseFix.NPos(subStr: string; Str: string; n: Integer): Integer;
 var
-  sTemp: string;
   i, position: Integer;
   x, y: Integer;
 begin
-  sTemp := Str;
   Result := 0;
   for i:=1 to n do
   begin
-    position := Pos(subStr, sTemp);
+    position := Pos(subStr, Str);
 
     x := position + Length(subStr);
-    y := Length(sTemp) - position - Length(subStr)+1;
-    sTemp := Copy(sTemp, x, y);
+    y := Length(Str) - position - Length(subStr)+1;
+    Str := Copy(Str, x, y);
     if (0 = position) then
     begin
       Result := 0;
