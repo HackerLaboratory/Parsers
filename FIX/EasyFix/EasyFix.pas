@@ -80,9 +80,16 @@ begin
   for i:=0 to FixList.Count-1 do
   begin
     aFixPkg := FixList.Items[i];
-    aFixPkg.Free();
+    if nil <> aFixPkg then
+    begin
+      aFixPkg.Free();
+    end;
   end;
-  FixList.Free();
+  if nil <> FixList then
+  begin
+    FixList.Clear();
+    FixList.Free();
+  end;
   inherited;
 end;
 
