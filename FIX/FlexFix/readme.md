@@ -1,10 +1,10 @@
-##EasyFix
+## EasyFix
 
 详细参见[《Delphi网络编程：FIX网络协议》](http://www.xumenger.com/delphi-network-fix-20161221/)
 
 在解析重复组时，顺序是从1而不是从0开始的
 
-##FlexFix
+## FlexFix
 
 在EasyFix的基础上修改Fix的解析逻辑，因为现在EasyFix没办法解析下面这样的报文
 
