@@ -20,9 +20,9 @@ type
     destructor Destroy; override;
     function GetFixValue(key: Integer; index: Integer = 1): TFixValue; 
   protected
-    //»ñÈ¡×Ó´®subStr³öÏÖÔÚStrÖĞµÚi´Î¶ÔÓ¦µÄÎ»ÖÃ£¬Î´ÕÒµ½Ê±·µ»Ø0
+    //è·å–å­ä¸²subStrå‡ºç°åœ¨Strä¸­ç¬¬næ¬¡å¯¹åº”çš„ä½ç½®ï¼Œæœªæ‰¾åˆ°æ—¶è¿”å›0
     function NPos(subStr: string; Str: string; n: Integer): Integer;
-    //sTextÊÇKey=Value<SOH>¸ñÊ½µÄ×Ö·û´®£¬¸ù¾İ¸Ã×Ö·û´®»ñÈ¡¼ü¡¢Öµ
+    //sTextæ˜¯Key=Value<SOH>æ ¼å¼çš„å­—ç¬¦ä¸²ï¼Œæ ¹æ®è¯¥å­—ç¬¦ä¸²è·å–é”®ã€å€¼
     procedure GetNameValue(sText: string; var iKey, sValue: string);
   protected
     sBuffer: string;
@@ -112,12 +112,12 @@ begin
     posNext := NPos(searchKey, tmpBuffer, 2);
     if (0 <> posNext) then
     begin
-      //Èç¹ûÓĞÏÂÒ»¸ökey£¬Ôò¿½±´µÚindex ¸ökey-value Ö®ºóµ½µÚindex+1 ¸ökey Ö®¼äµÄ×Ö·û´®
+      //å¦‚æœæœ‰ä¸‹ä¸€ä¸ªkeyï¼Œåˆ™æ‹·è´ç¬¬index ä¸ªkey-value ä¹‹ååˆ°ç¬¬index+1 ä¸ªkey ä¹‹é—´çš„å­—ç¬¦ä¸²
       sNewBuffer := Copy(tmpBuffer, posSOH+1, posNext-posSOH+1);
     end
     else
     begin
-      //Èç¹ûÃ»ÓĞÏÂÒ»¸ökey£¬Ôò¿½±´µÚindex ¸ökey-value Ö®ºóµ½sBuffer ×îºó×Ö·ûÖ®¼äµÄ×Ö·û´®
+      //å¦‚æœæ²¡æœ‰ä¸‹ä¸€ä¸ªkeyï¼Œåˆ™æ‹·è´ç¬¬index ä¸ªkey-value ä¹‹ååˆ°sBuffer æœ€åå­—ç¬¦ä¹‹é—´çš„å­—ç¬¦ä¸²
       sNewBuffer := Copy(tmpBuffer, posSOH+1, Length(tmpBuffer)-posSOH);
     end;
   end
@@ -140,7 +140,7 @@ begin
   end;
 end;
 
-//·µ»ØÖµ0±íÊ¾Ã»ÓĞËÑË÷µ½
+//è¿”å›å€¼0è¡¨ç¤ºæ²¡æœ‰æœç´¢åˆ°
 function TBaseFix.NPos(subStr: string; Str: string; n: Integer): Integer;
 var
   i, position: Integer;
@@ -241,33 +241,33 @@ end;
 
 function TFlexFix.GetBuffer: string;
 begin
-  //´ò°ü°üÍ·£¬µÚÒ»¸ö¼üÖµ¶ÔÊÇFIX°üµÄ³¤¶È£¬Êµ¼ÊÒª²»Òª´ò°üÒ²ÊÇĞèÒª¿´Ë«·½Ô¼¶¨
+  //æ‰“åŒ…åŒ…å¤´ï¼Œç¬¬ä¸€ä¸ªé”®å€¼å¯¹æ˜¯FIXåŒ…çš„é•¿åº¦ï¼Œå®é™…è¦ä¸è¦æ‰“åŒ…ä¹Ÿæ˜¯éœ€è¦çœ‹åŒæ–¹çº¦å®š
   sBuffer := '9' + SEQUAL + GetSpaceText((Length(sBuffer)), 5) + SOH + sBuffer;
 
-  //´ò°ü°üÎ²
-  //Õâ¸ö¿´Í¨ĞÅË«·½µÄÔ¼¶¨£¬ÓĞĞ©Ô¼¶¨ÒªÔÚ°üÎ²ÓÃ×¨ÃÅµÄ×Ö¶Î´ò°üĞ£ÑéÖµµÈĞÅÏ¢£¬ÓĞĞ©ÔòÃ»ÓĞ
+  //æ‰“åŒ…åŒ…å°¾
+  //è¿™ä¸ªçœ‹é€šä¿¡åŒæ–¹çš„çº¦å®šï¼Œæœ‰äº›çº¦å®šè¦åœ¨åŒ…å°¾ç”¨ä¸“é—¨çš„å­—æ®µæ‰“åŒ…æ ¡éªŒå€¼ç­‰ä¿¡æ¯ï¼Œæœ‰äº›åˆ™æ²¡æœ‰
 
-  //»ñÈ¡×îÖÕFIX°ü
+  //è·å–æœ€ç»ˆFIXåŒ…
   Result := sBuffer;
 end;
 
 function TFlexFix.GetSpaceText(value: string; iLen: Integer): string;
 begin
-  //stringÀàĞÍµÄÒªÔÚºó²¹¿Õ¸ñ
+  //stringç±»å‹çš„è¦åœ¨åè¡¥ç©ºæ ¼
   //Result := value + StringOfChar(' ', iLen - Length(value));
   Result := value;
 end;
 
 function TFlexFix.GetSpaceText(value: Integer; iLen: Integer): string;
 begin
-  //numberÀàĞÍÒªÔÚÇ°²¹¿Õ¸ñ
+  //numberç±»å‹è¦åœ¨å‰è¡¥ç©ºæ ¼
   //Result := StringOfChar(' ', iLen - Length(IntToStr(value))) + IntToStr(value);
   Result := IntToStr(value);
 end;
 
 function TFlexFix.GetSpaceText(value: Double; iLen: Integer): string;
 begin
-  //numberÀàĞÍÒªÔÚÇ°²¹¿Õ¸ñ
+  //numberç±»å‹è¦åœ¨å‰è¡¥ç©ºæ ¼
   //Result := StringOfChar(' ', iLen - Length(FloatToStr(value))) + FloatToStr(value);
   Result := FloatToStr(value);
 end;
