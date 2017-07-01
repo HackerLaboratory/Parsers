@@ -11,6 +11,7 @@
      4.通过文件锁保证多进程/多线程读写文件的安全性
      5.读写文件的技巧，需要考虑磁盘、缓存的细节
      6.编程规范：充分判断函数调用的各种返回值
+     7.如何根据FieldName快速定位到cDBF->Fields中的序号，需要实现一个排序
 **********************************************************************************/  
 #include <stdio.h>
 #include <string.h>
@@ -47,15 +48,55 @@ CDBF* OpenDBF(char* filePath)
     //申请内存保存DBF文件的目录
     cDBF->Path = malloc(strlen(filePath) + 1);
     strcpy(cDBF->Path, filePath);
-    //读取文件头
-    if (FAIL == ReadHead(cDBF)){
+    //申请存储文件头的内存
+    cDBF->Head = malloc(sizeof(DBFHead));
+    if (NULL == cDBF->Head){
+        free(cDBF->Path);
         free(cDBF);
         return NULL;
     }
-    if (FAIL == ReadFields(cDBF)){
+    //读取文件头
+    if (FAIL == ReadHead(cDBF)){
+        free(cDBF->Path);
         free(cDBF->Head);
         free(cDBF);
         return NULL;
+    }
+    //判断文件列个数
+    cDBF->FieldCount = (cDBF->Head->DataOffset - sizeof(DBFHead)) / sizeof(DBFField);
+    if ((cDBF->FieldCount < MIN_FIELD_COUNT) || (cDBF->FieldCount > MAX_FIELD_COUNT)){
+        free(cDBF->Path);
+        free(cDBF->Head);
+        free(cDBF);
+        return NULL;
+    }
+    //申请存储列信息的内存
+    cDBF->Fields = malloc(sizeof(DBFField) * cDBF->FieldCount);
+    if (NULL == cDBF->Fields){
+        free(cDBF->Path);
+        free(cDBF->Head);
+        free(cDBF);
+        return NULL;
+    }
+    //读列信息
+    if (FAIL == ReadFields(cDBF)){
+        free(cDBF->Path);
+        free(cDBF->Head);
+        free(cDBF->Fields);
+        free(cDBF);
+        return NULL;
+    }
+    //定位到第一行
+    cDBF->RecNo = 0;
+    if (cDBF->Head->RecCount > 0){
+        //不考虑删除的情况，所以不需要考虑读的时候有一行，Go的时候被删除的情况！
+        if (SUCCESS == Go(cDBF, 1)){
+            cDBF->RecNo = 1;            
+        }
+        else{
+            CloseDBF(cDBF);
+            return NULL;
+        }
     }
 
     return cDBF;
@@ -68,13 +109,20 @@ CDBF* OpenDBF(char* filePath)
 * Input      :
     * cDBF, OpenDBF返回的CDBF结构体指针  
 * Output     :
-* Return     : 是否关闭成功, 0:关闭成功; 1:关闭失败
+* Return     : 是否关闭成功, -1:关闭成功; 1:关闭失败
 * Others     : 
 *******************************************************************************/ 
 int CloseDBF(CDBF* cDBF)
 {
-    //OpenDBF中逐层申请内存，在Close中逐层释放内存、释放文件句柄
-    return 0;
+    if (NULL != cDBF){
+        //OpenDBF中逐层申请内存，在Close中逐层释放内存、释放文件句柄
+        free(cDBF->Path);
+        fclose(cDBF->FHandle);
+        free(cDBF->Head);
+        free(cDBF->Fields);
+        return SUCCESS;
+    }
+    return FAIL;
 }
 
 
@@ -89,7 +137,7 @@ int CloseDBF(CDBF* cDBF)
 *******************************************************************************/ 
 int First(CDBF* cDBF)
 {
-    return NONE;
+    
 }
 
 
@@ -104,7 +152,7 @@ int First(CDBF* cDBF)
 *******************************************************************************/ 
 int Last(CDBF* cDBF)
 {
-    return NONE;
+    
 }
 
 
@@ -119,7 +167,7 @@ int Last(CDBF* cDBF)
 *******************************************************************************/
 int Next(CDBF* cDBF)
 {
-    return NONE;
+    
 }
 
 
@@ -165,7 +213,15 @@ int Go(CDBF* cDBF, int rowNo)
 *******************************************************************************/
 int Eof(CDBF* cDBF)
 {
-    return TRUE;
+    if (FAIL == Fresh(cDBF)){
+        return TRUE;
+    }
+    if (cDBF->RecNo > cDBF->Head->RecCount){
+        return TRUE;
+    }
+    else{
+        return FAIL;
+    }
 }
 
 
@@ -256,7 +312,7 @@ int Zap(CDBF* cDBF)
 *******************************************************************************/
 int Fresh(CDBF* cDBF)
 {
-    return FAIL;
+    return ReadHead(cDBF);
 }
 
 
@@ -442,26 +498,15 @@ int SetFieldAsString(CDBF* cDBF, char* fieldName, char* value)
 ----------------------------------------------------------------------------*/
 int ReadHead(CDBF* cDBF)
 {
-    //申请存储文件头的内存
-    cDBF->Head = malloc(sizeof(DBFHead));
-    if (NULL == cDBF->Head){
-        #ifdef DEBUG
-    	printf("Debug ReadHead malloc Error\n");
-    	#endif
-
-        return FAIL;
-    }
-
     /*先实现功能，这里需要加锁，后续实现！*/
 
-    //fread从cDBF->FHandle读1个sizeof(DBFHead)字节的数据放到cDBF->Head中
+    //fread从cDBF->FHandle读1个sizeof(DBFHead)字节的数据放到cDBF->Head中，fread会自动移动文件指针
     int readCount = fread(cDBF->Head, sizeof(DBFHead), 1, cDBF->FHandle);
     if (1 != readCount){
         #ifdef DEBUG
         printf("Debug ReadHead fread Error, readCount = %d\n", readCount);
         #endif
 
-        free(cDBF->Head);
         return FAIL;
     }
 
@@ -485,22 +530,6 @@ int ReadHead(CDBF* cDBF)
 ----------------------------------------------------------------------------*/
 int ReadFields(CDBF* cDBF)
 {
-    cDBF->FieldCount = (cDBF->Head->DataOffset - sizeof(DBFHead)) / sizeof(DBFField);
-    if ((cDBF->FieldCount < MIN_FIELD_COUNT) || (cDBF->FieldCount > MAX_FIELD_COUNT)){
-        #ifdef DEBUG
-        printf("Debug ReadFields FieldCount = %d, not in [1, 254]\n", cDBF->FieldCount);
-        #endif
-        return FAIL;
-    }
-    //申请存储列信息的内存
-    cDBF->Fields = malloc(sizeof(DBFField) * cDBF->FieldCount);
-    if (NULL == cDBF->Fields){
-        #ifdef DEBUG
-    	printf("Debug ReadFields malloc Error\n");
-    	#endif
-
-        return FAIL;
-    }
     //将列信息从磁盘读取到内存
     int readCount = fread(cDBF->Fields, sizeof(DBFField), cDBF->FieldCount, cDBF->FHandle);
     if (readCount != cDBF->FieldCount){
@@ -508,12 +537,16 @@ int ReadFields(CDBF* cDBF)
         printf("Debug ReadFields fread Error, readCount = %d, FieldCount = %d\n", readCount, cDBF->FieldCount);
         #endif;
 
-        free(cDBF->Fields);
         return FAIL;
     }
 
     #ifdef DEBUG
     printf("Debug ReadFields FieldCount = %d\n", cDBF->FieldCount);
+    printf("Debug ReadFields print FieldName\n");
+    int i = 0;
+    for (i=0; i<cDBF->FieldCount; i++){
+        printf("Debug ReadFields %s\n", cDBF->Fields[i].FieldName);
+    }
     #endif
 
     return SUCCESS;

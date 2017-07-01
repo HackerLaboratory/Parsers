@@ -23,28 +23,32 @@
 #define TYPE_FLOAT 'F'          //浮点小数
 
 //DBF中的标记字节
-#define DBFEOF = 0x1A           //DBF文件结束
-#define HDREND = 0x0D           //头结束
-#define FOXPRODBF = 0x03        //FoxPro文件标识
-#define SPACE = ' '             //空格字符
-#define DELETED = '*'           //删除标记
-#define FDARSVLEN = 14          //FDA中的保留字节数
-#define HDRRSVLEN = 20          //HDR中的保留字节数
+#define DBFEOF 0x1A             //DBF文件结束
+#define HDREND 0x0D             //头结束
+#define FOXPRODBF 0x03          //FoxPro文件标识
+#define SPACE ' '               //空格字符
+#define DELETED '*'             //删除标记
+#define FDARSVLEN 14            //FDA中的保留字节数
+#define HDRRSVLEN 20            //HDR中的保留字节数
 
 //字段缺省长度
-#define DEFLEN_CHAR = 15        //字符串
-#define DEFLEN_NUMERIC = 12     //数值
-#define DEFLEN_DATE = 8         //日期
-#define DEFLEN_LOGICAL = 1      //逻辑
-#define DEFLEN_FLOAT = 15       //浮点数总长
-#define DEFLEN_PREC = 4         //浮点数小数部分
+#define DEFLEN_CHAR 15          //字符串
+#define DEFLEN_NUMERIC 12       //数值
+#define DEFLEN_DATE 8           //日期
+#define DEFLEN_LOGICAL 1        //逻辑
+#define DEFLEN_FLOAT 15         //浮点数总长
+#define DEFLEN_PREC 4           //浮点数小数部分
 
 //字段长度上限
-#define LIMLEN_CHAR = 254       //字符串
-#define LIMLEN_NUMERIC = 20     //数值
-#define LIMLEN_DATE = 8         //日期
-#define LIMLEN_LOGICAL = 1      //逻辑
-#define LIMLEN_FLOAT = 20       //浮点
+#define LIMLEN_CHAR 254         //字符串
+#define LIMLEN_NUMERIC 20       //数值
+#define LIMLEN_DATE 8           //日期
+#define LIMLEN_LOGICAL 1        //逻辑
+#define LIMLEN_FLOAT 20         //浮点
+
+//DBF列的上下限
+#define MIN_FIELD_COUNT 1
+#define MAX_FIELD_COUNT 254
 
 //C没有布尔类型，在这里定义
 #define TRUE 1
@@ -84,11 +88,11 @@ typedef struct TDBFField
 //CDBF对象，封装DBF的所有信息
 typedef struct TCDBF
 {
-    DBFHead* Head;               //文件头信息
-    DBFField* Field;            //根据DBF实际的列数，动态申请对应个数的DBFField结构体
-    int FieldCount;             //列个数
     char* Path;                 //文件路径
     FILE* FHandle;              //文件描述符
+    DBFHead* Head;              //文件头信息
+    DBFField* Fields;           //根据DBF实际的列数，动态申请对应个数的DBFField结构体
+    int FieldCount;             //列个数
     int RecNo;                  //CDBF当前指向的行号
 }CDBF;
 
