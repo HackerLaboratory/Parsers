@@ -535,7 +535,7 @@ int ReadFields(CDBF* cDBF)
     if (readCount != cDBF->FieldCount){
         #ifdef DEBUG
         printf("Debug ReadFields fread Error, readCount = %d, FieldCount = %d\n", readCount, cDBF->FieldCount);
-        #endif;
+        #endif
 
         return FAIL;
     }
