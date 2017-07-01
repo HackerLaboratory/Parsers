@@ -18,6 +18,7 @@
 #include "cDBF.h"
 
 int ReadHead(CDBF* cDBF);
+int ReadFields(CDBF* cDBF);
 int LockRow(CDBF* cDBF);
 int UnLockRow(CDBF* cDBF);
 
@@ -47,7 +48,15 @@ CDBF* OpenDBF(char* filePath)
     cDBF->Path = malloc(strlen(filePath) + 1);
     strcpy(cDBF->Path, filePath);
     //读取文件头
-    ReadHead(cDBF);
+    if (FAIL == ReadHead(cDBF)){
+        free(cDBF);
+        return NULL;
+    }
+    if (FAIL == ReadFields(cDBF)){
+        free(cDBF->Head);
+        free(cDBF);
+        return NULL;
+    }
 
     return cDBF;
 }
@@ -436,16 +445,75 @@ int ReadHead(CDBF* cDBF)
     //申请存储文件头的内存
     cDBF->Head = malloc(sizeof(DBFHead));
     if (NULL == cDBF->Head){
+        #ifdef DEBUG
+    	printf("Debug ReadHead malloc Error\n");
+    	#endif
+
         return FAIL;
     }
+
+    /*先实现功能，这里需要加锁，后续实现！*/
+
     //fread从cDBF->FHandle读1个sizeof(DBFHead)字节的数据放到cDBF->Head中
-    if (1 != fread(cDBF->Head, sizeof(DBFHead), 1, cDBF->FHandle)){
+    int readCount = fread(cDBF->Head, sizeof(DBFHead), 1, cDBF->FHandle);
+    if (1 != readCount){
+        #ifdef DEBUG
+        printf("Debug ReadHead fread Error, readCount = %d\n", readCount);
+        #endif
+
         free(cDBF->Head);
         return FAIL;
     }
 
     #ifdef DEBUG
-    printf("Debug RecCount = %d\n", cDBF->Head->RecCount);
+    printf("Debug ReadHead RecCount = %d\n", cDBF->Head->RecCount);
+    #endif
+
+    return SUCCESS;
+}
+
+
+/*----------------------------------------------------------------------------
+* Function   : ReadFields
+* Description: 读DBF文件的列信息
+* Input      :
+    * cDBF, OpenDBF返回的CDBF结构体指针  
+* Output     :
+* Return     :
+    * 是否读取成功, -1:读取失败; 1:读取成功
+* Others     :
+----------------------------------------------------------------------------*/
+int ReadFields(CDBF* cDBF)
+{
+    cDBF->FieldCount = (cDBF->Head->DataOffset - sizeof(DBFHead)) / sizeof(DBFField);
+    if ((cDBF->FieldCount < MIN_FIELD_COUNT) || (cDBF->FieldCount > MAX_FIELD_COUNT)){
+        #ifdef DEBUG
+        printf("Debug ReadFields FieldCount = %d, not in [1, 254]\n", cDBF->FieldCount);
+        #endif
+        return FAIL;
+    }
+    //申请存储列信息的内存
+    cDBF->Fields = malloc(sizeof(DBFField) * cDBF->FieldCount);
+    if (NULL == cDBF->Fields){
+        #ifdef DEBUG
+    	printf("Debug ReadFields malloc Error\n");
+    	#endif
+
+        return FAIL;
+    }
+    //将列信息从磁盘读取到内存
+    int readCount = fread(cDBF->Fields, sizeof(DBFField), cDBF->FieldCount, cDBF->FHandle);
+    if (readCount != cDBF->FieldCount){
+        #ifdef DEBUG
+        printf("Debug ReadFields fread Error, readCount = %d, FieldCount = %d\n", readCount, cDBF->FieldCount);
+        #endif;
+
+        free(cDBF->Fields);
+        return FAIL;
+    }
+
+    #ifdef DEBUG
+    printf("Debug ReadFields FieldCount = %d\n", cDBF->FieldCount);
     #endif
 
     return SUCCESS;
