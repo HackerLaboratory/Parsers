@@ -4,11 +4,20 @@
  * Author       : xumenger
  * Version      : V1.0.0 
  * Date         : 2017-06-30
- * Description  : cDBF.h对外方法接口实现
+ * Description  : 
+     1.cDBF.h对外方法接口实现
+     2.注意内存的管理：申请和释放的一一对应；防止内存泄漏；防止野指针等
+     3.注意字符串的操作安全性
+     4.通过文件锁保证多进程/多线程读写文件的安全性
+     5.读写文件的技巧，需要考虑磁盘、缓存的细节
+     6.编程规范：充分判断函数调用的各种返回值
 **********************************************************************************/  
-
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
 #include "cDBF.h"
 
+int ReadHead(CDBF* cDBF);
 int LockRow(CDBF* cDBF);
 int UnLockRow(CDBF* cDBF);
 
@@ -18,13 +27,31 @@ int UnLockRow(CDBF* cDBF);
 * Input      :
     * filePath, DBF文件目录  
 * Output     :
-* Return     : 该DBF文件对应的CDBF文件指针
+* Return     : 该DBF文件对应的CDBF文件指针; 返回NULL表示打开失败
 * Others     : 
 *******************************************************************************/  
 CDBF* OpenDBF(char* filePath)
 {
-    return NULL;
+    //为cDBF申请内存
+    CDBF* cDBF = malloc(sizeof(CDBF));
+    if (NULL == cDBF){
+        return NULL;
+    }
+    //读写二进制文件方式打开DBF文件
+    cDBF->FHandle = fopen(filePath, "rb+");
+    if (NULL == cDBF->FHandle){
+        free(cDBF);
+        return NULL;
+    }
+    //申请内存保存DBF文件的目录
+    cDBF->Path = malloc(strlen(filePath) + 1);
+    strcpy(cDBF->Path, filePath);
+    //读取文件头
+    ReadHead(cDBF);
+
+    return cDBF;
 }
+
 
 /******************************************************************************* 
 * Function   : CloseDBF
@@ -34,13 +61,13 @@ CDBF* OpenDBF(char* filePath)
 * Output     :
 * Return     : 是否关闭成功, 0:关闭成功; 1:关闭失败
 * Others     : 
-
-
 *******************************************************************************/ 
 int CloseDBF(CDBF* cDBF)
 {
+    //OpenDBF中逐层申请内存，在Close中逐层释放内存、释放文件句柄
     return 0;
 }
+
 
 /******************************************************************************* 
 * Function   : First
@@ -56,6 +83,7 @@ int First(CDBF* cDBF)
     return NONE;
 }
 
+
 /******************************************************************************* 
 * Function   : Last
 * Description: 切换到DBF文件的最后一条记录
@@ -69,6 +97,7 @@ int Last(CDBF* cDBF)
 {
     return NONE;
 }
+
 
 /******************************************************************************* 
 * Function   : Next
@@ -84,6 +113,7 @@ int Next(CDBF* cDBF)
     return NONE;
 }
 
+
 /******************************************************************************* 
 * Function   : Prior
 * Description: 切换到DBF文件的上一条记录
@@ -97,6 +127,7 @@ int Prior(CDBF* cDBF)
 {
     return NONE;
 }
+
 
 /******************************************************************************* 
 * Function   : Go
@@ -113,6 +144,7 @@ int Go(CDBF* cDBF, int rowNo)
     return FAIL;
 }
 
+
 /******************************************************************************* 
 * Function   : Eof
 * Description: 如果指向最后一行的下一行就返回Eof为True
@@ -126,6 +158,7 @@ int Eof(CDBF* cDBF)
 {
     return TRUE;
 }
+
 
 /******************************************************************************* 
 * Function   : Edit
@@ -141,6 +174,7 @@ int Edit(CDBF* cDBF)
     return FAIL;
 }
 
+
 /******************************************************************************* 
 * Function   : Append
 * Description: 新增一行
@@ -155,6 +189,7 @@ int Append(CDBF* cDBF)
     return FAIL;
 }
 
+
 /******************************************************************************* 
 * Function   : Delete
 * Description: 将当前行设置为Deleted
@@ -164,10 +199,11 @@ int Append(CDBF* cDBF)
 * Return     : 是否删除成功, -1:删除失败; 1:删除成功
 * Others     : 删除成功后需调用Post方法从内存更新到磁盘
 *******************************************************************************/
-int Delete(CDBF* cDBF);
+int Delete(CDBF* cDBF)
 {
     return FAIL;
 }
+
 
 /******************************************************************************* 
 * Function   : Post
@@ -182,6 +218,7 @@ int Post(CDBF* cDBF)
 {
     return FAIL;
 }
+
 
 /******************************************************************************* 
 * Function   : Zap
@@ -198,6 +235,7 @@ int Zap(CDBF* cDBF)
     return FAIL;
 }
 
+
 /******************************************************************************* 
 * Function   : Fresh
 * Description: 将DBF信息从磁盘更新到内存，刷新记录数等信息
@@ -212,6 +250,7 @@ int Fresh(CDBF* cDBF)
     return FAIL;
 }
 
+
 /******************************************************************************* 
 * Function   : GetFieldAsBoolean
 * Description: 获取cDBF指向的当前行的fieldName列的值，并作为布尔值返回
@@ -223,10 +262,11 @@ int Fresh(CDBF* cDBF)
 * Return     : 布尔值, 0-False; 1-True; default-读取失败返回默认值
 * Others     :
 *******************************************************************************/
-unsigned char GetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char bDefault);
+unsigned char GetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char bDefault)
 {
     return TRUE;
 }
+
 
 /******************************************************************************* 
 * Function   : GetFieldAsInteger
@@ -239,10 +279,11 @@ unsigned char GetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char bDefa
 * Return     : 返回的整型值
 * Others     :
 *******************************************************************************/
-int GetFieldAsInteger(CDBF* cDBF, char* fieldName, int iDefault);
+int GetFieldAsInteger(CDBF* cDBF, char* fieldName, int iDefault)
 {
     return 0;
 }
+
 
 /******************************************************************************* 
 * Function   : GetFieldAsInteger
@@ -255,10 +296,11 @@ int GetFieldAsInteger(CDBF* cDBF, char* fieldName, int iDefault);
 * Return     : 返回的浮点值
 * Others     :
 *******************************************************************************/
-float GetFieldAsFloat(CDBF* cDBF, char* fieldName, float fDefault);
+float GetFieldAsFloat(CDBF* cDBF, char* fieldName, float fDefault)
 {
     return 0.0;
 }
+
 
 /******************************************************************************* 
 * Function   : GetFieldAsChar
@@ -271,10 +313,11 @@ float GetFieldAsFloat(CDBF* cDBF, char* fieldName, float fDefault);
 * Return     : 返回的字符值
 * Others     :
 *******************************************************************************/
-char GetFieldAsChar(CDBF* cDBF, char* fieldName, char cDefault);
+char GetFieldAsChar(CDBF* cDBF, char* fieldName, char cDefault)
 {
     return ' ';
 }
+
 
 /******************************************************************************* 
 * Function   : GetFieldAsString
@@ -287,10 +330,11 @@ char GetFieldAsChar(CDBF* cDBF, char* fieldName, char cDefault);
 * Return     : 返回的字符串
 * Others     :
 *******************************************************************************/
-char* GetFieldAsString(CDBF* cDBF, char* fieldName, char* sDefault);
+char* GetFieldAsString(CDBF* cDBF, char* fieldName, char* sDefault)
 {
     return "";
 }
+
 
 /******************************************************************************* 
 * Function   : SetFieldAsBoolean
@@ -308,6 +352,7 @@ int SetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char value)
     return SUCCESS;
 }
 
+
 /******************************************************************************* 
 * Function   : SetFieldAsInteger
 * Description: 设置cDBF指向的当前行的fieldName列的值
@@ -323,6 +368,7 @@ int SetFieldAsInteger(CDBF* cDBF, char* fieldName, int value)
 {
     return SUCCESS;
 }
+
 
 /******************************************************************************* 
 * Function   : SetFieldAsFloat
@@ -340,6 +386,7 @@ int SetFieldAsFloat(CDBF* cDBF, char* fieldName, float value)
     return SUCCESS;
 }
 
+
 /******************************************************************************* 
 * Function   : SetFieldAsChar
 * Description: 设置cDBF指向的当前行的fieldName列的值
@@ -355,6 +402,7 @@ int SetFieldAsChar(CDBF* cDBF, char* fieldName, char value)
 {
     return SUCCESS;
 }
+
 
 /******************************************************************************* 
 * Function   : SetFieldAsString
@@ -372,6 +420,38 @@ int SetFieldAsString(CDBF* cDBF, char* fieldName, char* value)
     return SUCCESS;
 }
 
+
+/*----------------------------------------------------------------------------
+* Function   : ReadHead
+* Description: 读DBF文件的文件头，OpenDBF、Fresh时调用
+* Input      :
+    * cDBF, OpenDBF返回的CDBF结构体指针  
+* Output     :
+* Return     :
+    * 是否读取成功, -1:读取失败; 1:读取成功
+* Others     :
+----------------------------------------------------------------------------*/
+int ReadHead(CDBF* cDBF)
+{
+    //申请存储文件头的内存
+    cDBF->Head = malloc(sizeof(DBFHead));
+    if (NULL == cDBF->Head){
+        return FAIL;
+    }
+    //fread从cDBF->FHandle读1个sizeof(DBFHead)字节的数据放到cDBF->Head中
+    if (1 != fread(cDBF->Head, sizeof(DBFHead), 1, cDBF->FHandle)){
+        free(cDBF->Head);
+        return FAIL;
+    }
+
+    #ifdef DEBUG
+    printf("Debug RecCount = %d\n", cDBF->Head->RecCount);
+    #endif
+
+    return SUCCESS;
+}
+
+
 /*----------------------------------------------------------------------------
 * Function   : Lock
 * Description: 
@@ -388,6 +468,7 @@ int LockRow(CDBF* cDBF)
 {
     return SUCCESS;
 }
+
 
 /*----------------------------------------------------------------------------
 * Function   : UnLock
