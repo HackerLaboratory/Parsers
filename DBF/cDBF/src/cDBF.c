@@ -1,5 +1,5 @@
 /********************************************************************************* 
- * Copyright(C), Xumenger
+ * Copyright(C), xumenger
  * FileName     : cDBF.h
  * Author       : xumenger
  * Version      : V1.0.0 
@@ -20,6 +20,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include "cDBF.h"
+#include "cHash.h"
 
 int ReadHead(CDBF* cDBF);
 int ReadFields(CDBF* cDBF);
@@ -133,6 +134,7 @@ int CloseDBF(CDBF* cDBF)
         free(cDBF->Fields);
 		free(cDBF->Values);
         free(cDBF);
+        cDBF = NULL;
         return DBF_SUCCESS;
     }
     return DBF_FAIL;
@@ -302,7 +304,7 @@ int Edit(CDBF* cDBF)
 *******************************************************************************/
 int Append(CDBF* cDBF)
 {
-    cDBF->status = dsEdit;
+    cDBF->status = dsAppend;
     return DBF_SUCCESS;
 }
 
@@ -437,6 +439,7 @@ double GetFieldAsFloat(CDBF* cDBF, char* fieldName)
     
     //注意，该函数需要包含stdlib.h
     //不包含stdlib.h也能编译通过，但是总是返回0.0
+    //所以在编译时一定要加-Wall选项
     return atof(str);
 }
 

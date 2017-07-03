@@ -1,5 +1,5 @@
 /********************************************************************************* 
- * Copyright(C), Xumenger
+ * Copyright(C), xumenger
  * FileName     : cDBF.h
  * Author       : xumenger
  * Version      : V1.0.0 
