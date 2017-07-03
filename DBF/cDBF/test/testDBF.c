@@ -25,8 +25,15 @@ int main()
     printf("\nget Data Message\n");
     Go(cDBF, 1);
     for(i=0; i<cDBF->FieldCount; i++){
-        printf("filed = %d, name = %s, value=%s\n", i, cDBF->Values[i].Field->FieldName, cDBF->Values[i].ValueBuf);
+        printf("filed = %d, name = %s, value = %s\n", i, cDBF->Values[i].Field->FieldName, cDBF->Values[i].ValueBuf);
     }
+    
+    printf("\ntest Go and FieldByName\n");
+    Go(cDBF, 2);
+    printf("name = %s, values = %s\n", "name", GetFieldAsString(cDBF, "nAmE", "defaultName"));
+    printf("name = %s, values = %s\n", "age", GetFieldAsString(cDBF, "agE", "defaultAge"));
+    printf("name = %s, values = %s\n", "birthday", GetFieldAsString(cDBF, "birtHday", "defaultBirthday"));
+    printf("name = %s, values = %s\n", "job", GetFieldAsString(cDBF, "job", "defaultJob"));
 
     printf("\nstart CloseDBF\n");
     CloseDBF(cDBF);

@@ -23,6 +23,7 @@ int ReadHead(CDBF* cDBF);
 int ReadFields(CDBF* cDBF);
 int LockRow(CDBF* cDBF, int rowNo);
 int UnLockRow(CDBF* cDBF, int rowNo);
+int GetIndexByName(CDBF* cDBF, char* FieldName);
 
 /*******************************************************************************
 * Function   : OpenDBF
@@ -129,6 +130,7 @@ int CloseDBF(CDBF* cDBF)
         free(cDBF->Head);
         free(cDBF->Fields);
 		free(cDBF->Values);
+        free(cDBF);
         return DBF_SUCCESS;
     }
     return DBF_FAIL;
@@ -451,12 +453,27 @@ char GetFieldAsChar(CDBF* cDBF, char* fieldName, char cDefault)
     * fieldName, 列名
     * default, 返回失败时的默认值
 * Output     :
-* Return     : 返回的字符串
+* Return     : 返回的字符串。
+    * 正常返回字符串，否则返回缺省字符串
+    * 如果使用者需要长久使用返回值，需要自己申请字符数组进行保存！
 * Others     :
 *******************************************************************************/
 char* GetFieldAsString(CDBF* cDBF, char* fieldName, char* sDefault)
 {
-    return "";
+    int index = GetIndexByName(cDBF, fieldName);
+    if(DBF_FAIL == index){
+        return sDefault;
+    }
+    
+    //字符串类型后面会用空格补齐，需要去除空格
+    int i = 0;
+    for(i=cDBF->Fields[index].Width-1; i>=0; i--){
+        if(' ' != cDBF->Values[index].ValueBuf[i]){
+            break;
+        }
+    }
+    cDBF->Values[index].ValueBuf[i+1] = NULL;
+    return cDBF->Values[index].ValueBuf;
 }
 
 
@@ -647,4 +664,31 @@ int LockRow(CDBF* cDBF, int rowNo)
 int UnLockRow(CDBF* cDBF, int rowNo)
 {
     return DBF_SUCCESS;
+}
+
+/*----------------------------------------------------------------------------
+* Function   : GetIndexByName
+* Description: 
+    * 根据列名找到该列对应的序号，用于根据列名获取某行记录的列值
+    * 该方法是cDBF的私有方法，不提供接口给外部调用
+* Input      :
+    * cDBF, OpenDBF返回的CDBF结构体指针
+    * FieldName, 列名
+* Output     :
+* Return     :
+    * 列的序号, -1:没找到对应列失败; >=0:列的序号
+* Others     :
+----------------------------------------------------------------------------*/
+int GetIndexByName(CDBF* cDBF, char* FieldName)
+{
+    int i = 0;
+    //现在实现为逐列比较，DBF列一般不多，所以虽然时间复杂度为O(N)，但影响不大
+    //后续可以考虑实现为Hash的方式在O(1)的时间复杂度内快速定位列序号
+    for(i=0; i<cDBF->FieldCount; i++){
+        //不区分大小写的比较字符串
+        if(0 == strcasecmp(FieldName, cDBF->Fields[i].FieldName)){
+            return i;
+        }
+    }
+    return DBF_FAIL;    
 }
