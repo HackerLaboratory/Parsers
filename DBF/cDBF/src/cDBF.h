@@ -21,7 +21,6 @@ int Last(CDBF* cDBF);
 int Next(CDBF* cDBF);
 int Prior(CDBF* cDBF);
 int Go(CDBF* cDBF, int rowNo);
-int Eof(CDBF* cDBF);
 int Edit(CDBF* cDBF);
 int Append(CDBF* cDBF);
 int Delete(CDBF* cDBF);

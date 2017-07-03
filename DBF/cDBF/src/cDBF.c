@@ -12,6 +12,7 @@
      5.读写文件的技巧，需要考虑磁盘、缓存的细节
      6.编程规范：充分判断函数调用的各种返回值
      7.如何根据FieldName快速定位到cDBF->Fields中的序号，需要实现一个排序
+     8.需要显式将字符串最后一位设置为NULL
 **********************************************************************************/  
 #include <stdio.h>
 #include <string.h>
@@ -20,8 +21,8 @@
 
 int ReadHead(CDBF* cDBF);
 int ReadFields(CDBF* cDBF);
-int LockRow(CDBF* cDBF);
-int UnLockRow(CDBF* cDBF);
+int LockRow(CDBF* cDBF, int rowNo);
+int UnLockRow(CDBF* cDBF, int rowNo);
 
 /*******************************************************************************
 * Function   : OpenDBF
@@ -39,6 +40,7 @@ CDBF* OpenDBF(char* filePath)
     if (NULL == cDBF){
         return NULL;
     }
+    cDBF->status = dsBrowse;
     //读写二进制文件方式打开DBF文件
     cDBF->FHandle = fopen(filePath, "rb+");
     if (NULL == cDBF->FHandle){
@@ -56,7 +58,7 @@ CDBF* OpenDBF(char* filePath)
         return NULL;
     }
     //读取文件头
-    if (FAIL == ReadHead(cDBF)){
+    if (DBF_FAIL == ReadHead(cDBF)){
         free(cDBF->Path);
         free(cDBF->Head);
         free(cDBF);
@@ -79,7 +81,16 @@ CDBF* OpenDBF(char* filePath)
         return NULL;
     }
     //读列信息
-    if (FAIL == ReadFields(cDBF)){
+    if (DBF_FAIL == ReadFields(cDBF)){
+        free(cDBF->Path);
+        free(cDBF->Head);
+        free(cDBF->Fields);
+        free(cDBF);
+        return NULL;
+    }
+	//申请列值信息的存储空间
+	cDBF->Values = malloc(sizeof(DBFValue) * cDBF->FieldCount);
+	if (NULL == cDBF->Values){
         free(cDBF->Path);
         free(cDBF->Head);
         free(cDBF->Fields);
@@ -90,10 +101,7 @@ CDBF* OpenDBF(char* filePath)
     cDBF->RecNo = 0;
     if (cDBF->Head->RecCount > 0){
         //不考虑删除的情况，所以不需要考虑读的时候有一行，Go的时候被删除的情况！
-        if (SUCCESS == Go(cDBF, 1)){
-            cDBF->RecNo = 1;            
-        }
-        else{
+        if (DBF_SUCCESS != Go(cDBF, 1)){
             CloseDBF(cDBF);
             return NULL;
         }
@@ -120,9 +128,10 @@ int CloseDBF(CDBF* cDBF)
         fclose(cDBF->FHandle);
         free(cDBF->Head);
         free(cDBF->Fields);
-        return SUCCESS;
+		free(cDBF->Values);
+        return DBF_SUCCESS;
     }
-    return FAIL;
+    return DBF_FAIL;
 }
 
 
@@ -137,7 +146,10 @@ int CloseDBF(CDBF* cDBF)
 *******************************************************************************/ 
 int First(CDBF* cDBF)
 {
-    
+    if(cDBF->Head->RecCount <= 0){
+        return DBF_NONE;
+    }
+    return Go(cDBF, 1);
 }
 
 
@@ -152,7 +164,10 @@ int First(CDBF* cDBF)
 *******************************************************************************/ 
 int Last(CDBF* cDBF)
 {
-    
+    if(cDBF->Head->RecCount <= 0){
+        return DBF_EOF;
+    }
+	return Go(cDBF, cDBF->Head->RecCount);
 }
 
 
@@ -167,7 +182,10 @@ int Last(CDBF* cDBF)
 *******************************************************************************/
 int Next(CDBF* cDBF)
 {
-    
+    if(cDBF->RecNo > cDBF->Head->RecCount){
+        return DBF_EOF;
+    }
+	return Go(cDBF, cDBF->RecNo + 1);
 }
 
 
@@ -182,7 +200,10 @@ int Next(CDBF* cDBF)
 *******************************************************************************/
 int Prior(CDBF* cDBF)
 {
-    return NONE;
+    if((cDBF->Head->RecCount <= 0) || (cDBF->RecNo <= 1)){
+        return DBF_NONE;
+    }
+    return Go(cDBF, cDBF->RecNo - 1);
 }
 
 
@@ -198,30 +219,54 @@ int Prior(CDBF* cDBF)
 *******************************************************************************/
 int Go(CDBF* cDBF, int rowNo)
 {
-    return FAIL;
-}
+    if((rowNo <=0) || (rowNo > cDBF->Head->RecCount)){
+        return DBF_FAIL;
+    }
+    //加锁
+    if(DBF_SUCCESS != LockRow(cDBF, rowNo)){
+        #ifdef DEBUG
+        printf("Debug Go LockRow Error, rowNo = %d\n", rowNo);
+        #endif;
+        return DBF_FAIL;
+    }
+    //偏移：文件头偏移 + 该行前面的数据偏移 + 考虑每行记录开头一字节的delete标记
+    int Offset = cDBF->Head->DataOffset + (cDBF->Head->RecSize * (rowNo - 1)) + 1;
+    //修改文件指针到对应的记录位置。1.文件指针，2.指针的偏移量，3.指针偏移起始位置
+    if(0 != fseek(cDBF->FHandle, Offset, SEEK_SET)){
+        #ifdef DEBUG
+        printf("Debug Go fseek Error, rowNo = %d\n", rowNo);
+        #endif;
+        return DBF_FAIL;
+    }
+    //将DBF文件中该列的数据读到内存中
+    int i=0;
+    int Width = 0;
+    for(i=0; i<cDBF->FieldCount; i++){
+        //将列值和列信息建立关系
+        cDBF->Values[i].Field = &cDBF->Fields[i];
+        //将磁盘中的各列读到对应内存列值中
+        Width = cDBF->Values[i].Field->Width;
+        int readCount = fread(cDBF->Values[i].ValueBuf, Width, 1, cDBF->FHandle);
+        if (1 != readCount){
+            #ifdef DEBUG
+            printf("Debug Go fread Error, readCount = %d\n", readCount);
+            #endif
 
-
-/******************************************************************************* 
-* Function   : Eof
-* Description: 如果指向最后一行的下一行就返回Eof为True
-* Input      :
-    * cDBF, OpenDBF返回的CDBF结构体指针  
-* Output     :
-* Return     : 是否Eof, 0:Not Eof; 1:Eof
-* Others     :
-*******************************************************************************/
-int Eof(CDBF* cDBF)
-{
-    if (FAIL == Fresh(cDBF)){
-        return TRUE;
+            return DBF_FAIL;
+        }
+        //将字符串最后一位设置为NULL
+        cDBF->Values[i].ValueBuf[Width] = NULL;
     }
-    if (cDBF->RecNo > cDBF->Head->RecCount){
-        return TRUE;
+    //解锁
+    if(DBF_SUCCESS != UnLockRow(cDBF, rowNo)){
+        #ifdef DEBUG
+        printf("Debug Go UnLockRow Error, rowNo = %d\n", rowNo);
+        #endif;
+        return DBF_FAIL;
     }
-    else{
-        return FAIL;
-    }
+    //更新cDBF的记录信息
+    cDBF->RecNo = rowNo;
+    return DBF_SUCCESS;
 }
 
 
@@ -236,7 +281,9 @@ int Eof(CDBF* cDBF)
 *******************************************************************************/
 int Edit(CDBF* cDBF)
 {
-    return FAIL;
+    //直接返回，接下来在内存中编辑，然后调用Post才能更新到磁盘
+    cDBF->status = dsEdit;
+    return DBF_SUCCESS;
 }
 
 
@@ -251,7 +298,8 @@ int Edit(CDBF* cDBF)
 *******************************************************************************/
 int Append(CDBF* cDBF)
 {
-    return FAIL;
+    cDBF->status = dsEdit;
+    return DBF_SUCCESS;
 }
 
 
@@ -266,7 +314,8 @@ int Append(CDBF* cDBF)
 *******************************************************************************/
 int Delete(CDBF* cDBF)
 {
-    return FAIL;
+    cDBF->status = dsEdit;
+    return DBF_SUCCESS;
 }
 
 
@@ -281,7 +330,13 @@ int Delete(CDBF* cDBF)
 *******************************************************************************/
 int Post(CDBF* cDBF)
 {
-    return FAIL;
+    //编辑结果保存到磁盘
+    
+    //更新文件头中记录数信息
+    
+    //修改DBF文件编辑状态
+    cDBF->status = dsBrowse;
+    return DBF_SUCCESS;
 }
 
 
@@ -297,7 +352,11 @@ int Post(CDBF* cDBF)
 *******************************************************************************/
 int Zap(CDBF* cDBF)
 {
-    return FAIL;
+    //删除磁盘数据
+    
+    //更新文件头中记录数信息
+    
+    return DBF_SUCCESS;
 }
 
 
@@ -307,7 +366,7 @@ int Zap(CDBF* cDBF)
 * Input      :
     * cDBF, OpenDBF返回的CDBF结构体指针  
 * Output     :
-* Return     : 是否清空成功, -1:刷新失败; 1:刷新成功
+* Return     : 是否刷新成功, -1:刷新失败; 1:刷新成功
 * Others     :
 *******************************************************************************/
 int Fresh(CDBF* cDBF)
@@ -329,7 +388,7 @@ int Fresh(CDBF* cDBF)
 *******************************************************************************/
 unsigned char GetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char bDefault)
 {
-    return TRUE;
+    return DBF_TRUE;
 }
 
 
@@ -414,7 +473,7 @@ char* GetFieldAsString(CDBF* cDBF, char* fieldName, char* sDefault)
 *******************************************************************************/
 int SetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char value)
 {
-    return SUCCESS;
+    return DBF_SUCCESS;
 }
 
 
@@ -431,7 +490,7 @@ int SetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char value)
 *******************************************************************************/
 int SetFieldAsInteger(CDBF* cDBF, char* fieldName, int value)
 {
-    return SUCCESS;
+    return DBF_SUCCESS;
 }
 
 
@@ -448,7 +507,7 @@ int SetFieldAsInteger(CDBF* cDBF, char* fieldName, int value)
 *******************************************************************************/
 int SetFieldAsFloat(CDBF* cDBF, char* fieldName, float value)
 {
-    return SUCCESS;
+    return DBF_SUCCESS;
 }
 
 
@@ -465,7 +524,7 @@ int SetFieldAsFloat(CDBF* cDBF, char* fieldName, float value)
 *******************************************************************************/
 int SetFieldAsChar(CDBF* cDBF, char* fieldName, char value)
 {
-    return SUCCESS;
+    return DBF_SUCCESS;
 }
 
 
@@ -482,7 +541,7 @@ int SetFieldAsChar(CDBF* cDBF, char* fieldName, char value)
 *******************************************************************************/
 int SetFieldAsString(CDBF* cDBF, char* fieldName, char* value)
 {
-    return SUCCESS;
+    return DBF_SUCCESS;
 }
 
 
@@ -507,14 +566,14 @@ int ReadHead(CDBF* cDBF)
         printf("Debug ReadHead fread Error, readCount = %d\n", readCount);
         #endif
 
-        return FAIL;
+        return DBF_FAIL;
     }
 
     #ifdef DEBUG
     printf("Debug ReadHead RecCount = %d\n", cDBF->Head->RecCount);
     #endif
 
-    return SUCCESS;
+    return DBF_SUCCESS;
 }
 
 
@@ -535,9 +594,9 @@ int ReadFields(CDBF* cDBF)
     if (readCount != cDBF->FieldCount){
         #ifdef DEBUG
         printf("Debug ReadFields fread Error, readCount = %d, FieldCount = %d\n", readCount, cDBF->FieldCount);
-        #endif
+        #endif;
 
-        return FAIL;
+        return DBF_FAIL;
     }
 
     #ifdef DEBUG
@@ -549,7 +608,7 @@ int ReadFields(CDBF* cDBF)
     }
     #endif
 
-    return SUCCESS;
+    return DBF_SUCCESS;
 }
 
 
@@ -559,15 +618,16 @@ int ReadFields(CDBF* cDBF)
     * 通过文件锁将cDBF当前行锁住，保证在多进程/多线程并发情况下的数据一致性
     * 该方法是cDBF的私有方法，不提供接口给外部调用
 * Input      :
-    * cDBF, OpenDBF返回的CDBF结构体指针  
+    * cDBF, OpenDBF返回的CDBF结构体指针
+    * rowNo, 加锁的行号
 * Output     :
 * Return     :
     * 是否锁定成功, -1:锁定失败; 1:锁定成功
 * Others     :
 ----------------------------------------------------------------------------*/
-int LockRow(CDBF* cDBF)
+int LockRow(CDBF* cDBF, int rowNo)
 {
-    return SUCCESS;
+    return DBF_SUCCESS;
 }
 
 
@@ -577,13 +637,14 @@ int LockRow(CDBF* cDBF)
     * 给cDBF当前指向的行解文件锁
     * 该方法是cDBF的私有方法，不提供接口给外部调用
 * Input      :
-    * cDBF, OpenDBF返回的CDBF结构体指针  
+    * cDBF, OpenDBF返回的CDBF结构体指针
+    * rowNo, 解锁的行号
 * Output     :
 * Return     :
     * 是否解锁成功, -1:解锁失败; 1:解锁成功
 * Others     :
 ----------------------------------------------------------------------------*/
-int UnLockRow(CDBF* cDBF)
+int UnLockRow(CDBF* cDBF, int rowNo)
 {
-    return SUCCESS;
+    return DBF_SUCCESS;
 }

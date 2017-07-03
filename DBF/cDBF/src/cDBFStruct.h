@@ -11,6 +11,7 @@
      4.记录结构表取包括各个字段参数，每个字段占32字节
      5.http://www.xumenger.com/dbf-20160703/
      6.http://www.xumenger.com/DBF-DBFViewer-VisualFoxPro-20160802/
+     7.DBF中整型、浮点型的存储都是使用字符串格式存储的"123"、"11.12"
 **********************************************************************************/  
 #ifndef CDBFSTRUCT_H
 #define CDBFSTRUCT_H
@@ -51,12 +52,21 @@
 #define MAX_FIELD_COUNT 254
 
 //C没有布尔类型，在这里定义
-#define TRUE 1
-#define FALSE 0
+#define DBF_TRUE 1
+#define DBF_FALSE 0
 
-#define NONE 0
-#define SUCCESS 1
-#define FAIL -1
+#define DBF_EOF 0
+#define DBF_NONE 0
+#define DBF_SUCCESS 1
+#define DBF_FAIL -1
+
+//定义DBF状态
+typedef enum TDBFStatus
+{
+    dsBrowse,                  //查看
+    dsEdit,                    //编辑
+    dsAppend                   //新增
+}DBFStatus;
 
 //强制结构体不对齐，保证内存结构体和DBF文件一致
 #pragma pack(1)
@@ -85,6 +95,13 @@ typedef struct TDBFField
     char Reserved[14];          //保留字节
 }DBFField;
 
+//DBF行每个列结构
+typedef struct FDBFValue
+{
+    char ValueBuf[256];         //存储对应的值
+    DBFField* Field;            //存储对应的列头信息
+}DBFValue;
+
 //CDBF对象，封装DBF的所有信息
 typedef struct TCDBF
 {
@@ -92,8 +109,10 @@ typedef struct TCDBF
     FILE* FHandle;              //文件描述符
     DBFHead* Head;              //文件头信息
     DBFField* Fields;           //根据DBF实际的列数，动态申请对应个数的DBFField结构体
+    DBFValue* Values;           //每一行的各个列的值
     int FieldCount;             //列个数
     int RecNo;                  //CDBF当前指向的行号
+    DBFStatus status;           //DBF编辑状态
 }CDBF;
 
 #endif
