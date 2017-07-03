@@ -63,9 +63,9 @@
 //定义DBF状态
 typedef enum TDBFStatus
 {
-    dsBrowse,                  //查看
-    dsEdit,                    //编辑
-    dsAppend                   //新增
+    dsBrowse,                   //查看
+    dsEdit,                     //编辑
+    dsAppend                    //新增
 }DBFStatus;
 
 //强制结构体不对齐，保证内存结构体和DBF文件一致

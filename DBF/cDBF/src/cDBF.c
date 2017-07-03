@@ -13,8 +13,10 @@
      6.编程规范：充分判断函数调用的各种返回值
      7.如何根据FieldName快速定位到cDBF->Fields中的序号，需要实现一个排序
      8.需要显式将字符串最后一位设置为NULL
+     9.字符串和整型/浮点型的转换、浮点型的精度需要注意
 **********************************************************************************/  
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include "cDBF.h"
@@ -228,7 +230,7 @@ int Go(CDBF* cDBF, int rowNo)
     if(DBF_SUCCESS != LockRow(cDBF, rowNo)){
         #ifdef DEBUG
         printf("Debug Go LockRow Error, rowNo = %d\n", rowNo);
-        #endif;
+        #endif
         return DBF_FAIL;
     }
     //偏移：文件头偏移 + 该行前面的数据偏移 + 考虑每行记录开头一字节的delete标记
@@ -237,7 +239,7 @@ int Go(CDBF* cDBF, int rowNo)
     if(0 != fseek(cDBF->FHandle, Offset, SEEK_SET)){
         #ifdef DEBUG
         printf("Debug Go fseek Error, rowNo = %d\n", rowNo);
-        #endif;
+        #endif
         return DBF_FAIL;
     }
     //将DBF文件中该列的数据读到内存中
@@ -257,13 +259,13 @@ int Go(CDBF* cDBF, int rowNo)
             return DBF_FAIL;
         }
         //将字符串最后一位设置为NULL
-        cDBF->Values[i].ValueBuf[Width] = NULL;
+        cDBF->Values[i].ValueBuf[Width] = '\0';
     }
     //解锁
     if(DBF_SUCCESS != UnLockRow(cDBF, rowNo)){
         #ifdef DEBUG
         printf("Debug Go UnLockRow Error, rowNo = %d\n", rowNo);
-        #endif;
+        #endif
         return DBF_FAIL;
     }
     //更新cDBF的记录信息
@@ -383,14 +385,22 @@ int Fresh(CDBF* cDBF)
 * Input      :
     * cDBF, OpenDBF返回的CDBF结构体指针
     * fieldName, 列名
-    * default, 返回失败时的默认值
 * Output     :
-* Return     : 布尔值, 0-False; 1-True; default-读取失败返回默认值
+* Return     : 布尔值, 0-False; 1-True
 * Others     :
 *******************************************************************************/
-unsigned char GetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char bDefault)
+unsigned char GetFieldAsBoolean(CDBF* cDBF, char* fieldName)
 {
-    return DBF_TRUE;
+    int index = GetIndexByName(cDBF, fieldName);
+    if(DBF_FAIL == index){
+        return DBF_FALSE;
+    }
+    if(('L' == cDBF->Fields[index].FieldType) && ('T' == cDBF->Values[index].ValueBuf[0])){
+        return DBF_TRUE;
+    }
+    else{
+        return DBF_FALSE;
+    }
 }
 
 
@@ -400,14 +410,14 @@ unsigned char GetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char bDefa
 * Input      :
     * cDBF, OpenDBF返回的CDBF结构体指针
     * fieldName, 列名
-    * default, 返回失败时的默认值
 * Output     :
 * Return     : 返回的整型值
 * Others     :
 *******************************************************************************/
-int GetFieldAsInteger(CDBF* cDBF, char* fieldName, int iDefault)
+int GetFieldAsInteger(CDBF* cDBF, char* fieldName)
 {
-    return 0;
+    char* str = GetFieldAsString(cDBF, fieldName);
+    return atoi(str);
 }
 
 
@@ -417,31 +427,17 @@ int GetFieldAsInteger(CDBF* cDBF, char* fieldName, int iDefault)
 * Input      :
     * cDBF, OpenDBF返回的CDBF结构体指针
     * fieldName, 列名
-    * default, 返回失败时的默认值
 * Output     :
 * Return     : 返回的浮点值
 * Others     :
 *******************************************************************************/
-float GetFieldAsFloat(CDBF* cDBF, char* fieldName, float fDefault)
+double GetFieldAsFloat(CDBF* cDBF, char* fieldName)
 {
-    return 0.0;
-}
-
-
-/******************************************************************************* 
-* Function   : GetFieldAsChar
-* Description: 获取cDBF指向的当前行的fieldName列的值，并作为字符值返回
-* Input      :
-    * cDBF, OpenDBF返回的CDBF结构体指针
-    * fieldName, 列名
-    * default, 返回失败时的默认值
-* Output     :
-* Return     : 返回的字符值
-* Others     :
-*******************************************************************************/
-char GetFieldAsChar(CDBF* cDBF, char* fieldName, char cDefault)
-{
-    return ' ';
+    char* str = GetFieldAsString(cDBF, fieldName);
+    
+    //注意，该函数需要包含stdlib.h
+    //不包含stdlib.h也能编译通过，但是总是返回0.0
+    return atof(str);
 }
 
 
@@ -451,18 +447,17 @@ char GetFieldAsChar(CDBF* cDBF, char* fieldName, char cDefault)
 * Input      :
     * cDBF, OpenDBF返回的CDBF结构体指针
     * fieldName, 列名
-    * default, 返回失败时的默认值
 * Output     :
 * Return     : 返回的字符串。
-    * 正常返回字符串，否则返回缺省字符串
-    * 如果使用者需要长久使用返回值，需要自己申请字符数组进行保存！
+    * 正常返回字符串，否则返回空字符串
+    * 返回字符串数组指针，所以若调用者需长久使用字符串，要申请字符数组进行保存
 * Others     :
 *******************************************************************************/
-char* GetFieldAsString(CDBF* cDBF, char* fieldName, char* sDefault)
+char* GetFieldAsString(CDBF* cDBF, char* fieldName)
 {
     int index = GetIndexByName(cDBF, fieldName);
     if(DBF_FAIL == index){
-        return sDefault;
+        return "";
     }
     
     //字符串类型后面会用空格补齐，需要去除空格
@@ -472,7 +467,7 @@ char* GetFieldAsString(CDBF* cDBF, char* fieldName, char* sDefault)
             break;
         }
     }
-    cDBF->Values[index].ValueBuf[i+1] = NULL;
+    cDBF->Values[index].ValueBuf[i+1] = '\0';
     return cDBF->Values[index].ValueBuf;
 }
 
@@ -522,24 +517,7 @@ int SetFieldAsInteger(CDBF* cDBF, char* fieldName, int value)
 * Return     : -1, 设置失败; 1-设置成功
 * Others     :
 *******************************************************************************/
-int SetFieldAsFloat(CDBF* cDBF, char* fieldName, float value)
-{
-    return DBF_SUCCESS;
-}
-
-
-/******************************************************************************* 
-* Function   : SetFieldAsChar
-* Description: 设置cDBF指向的当前行的fieldName列的值
-* Input      :
-    * cDBF, OpenDBF返回的CDBF结构体指针
-    * fieldName, 列名
-    * default, 设置的值
-* Output     :
-* Return     : -1, 设置失败; 1-设置成功
-* Others     :
-*******************************************************************************/
-int SetFieldAsChar(CDBF* cDBF, char* fieldName, char value)
+int SetFieldAsFloat(CDBF* cDBF, char* fieldName, double value)
 {
     return DBF_SUCCESS;
 }
@@ -611,7 +589,7 @@ int ReadFields(CDBF* cDBF)
     if (readCount != cDBF->FieldCount){
         #ifdef DEBUG
         printf("Debug ReadFields fread Error, readCount = %d, FieldCount = %d\n", readCount, cDBF->FieldCount);
-        #endif;
+        #endif
 
         return DBF_FAIL;
     }
