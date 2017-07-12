@@ -15,10 +15,12 @@
      8.需要显式将字符串最后一位设置为NULL
      9.字符串和整型/浮点型的转换、浮点型的精度需要注意
     10.注意数组、字符串的处理，防止出现数组越界的严重问题
+    11.文件锁参考[http://blog.csdn.net/dragon_li_chen/article/details/17147911]
 **********************************************************************************/  
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include "cDBF.h"
 #include "cHash.h"
@@ -413,10 +415,14 @@ int Post(CDBF *cDBF)
 *******************************************************************************/
 int Zap(CDBF *cDBF)
 {
-    //删除磁盘数据
-    
+    //首先清空文件
+    //fileno通过fopen的文件描述符得到对应open的文件描述符
+    int fd = fileno(cDBF->FHandle);
+    ftruncate(fd, cDBF->Head->DataOffset);
     //更新文件头中记录数信息
-    
+    cDBF->Head->RecCount = 0;
+    WriteHead(cDBF);
+
     return DBF_SUCCESS;
 }
 
@@ -822,3 +828,4 @@ int GetIndexByName(CDBF *cDBF, char *FieldName)
     }
     return DBF_FAIL;    
 }
+

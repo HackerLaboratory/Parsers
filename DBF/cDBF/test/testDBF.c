@@ -1,5 +1,10 @@
 #include <stdio.h>
+#include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include "../src/cDBF.h"
+
+#define ONE_SECOND 1000000
 
 int main()
 {
@@ -81,6 +86,25 @@ int main()
     SetFieldAsString(cDBF, "birthday", "201707072017");
     SetFieldAsBoolean(cDBF, "bool", DBF_TRUE);
     Post(cDBF);
+
+    printf("\n[test Zap]\n");
+    Zap(cDBF);
+
+    printf("\n[test Speed]\n");
+    struct timeval tvStart, tvEnd;
+    gettimeofday(&tvStart, NULL);
+    for(i=0; i<1000; i++){
+        Append(cDBF);
+        SetFieldAsString(cDBF, "name", "post");
+        SetFieldAsInteger(cDBF, "age", 777);
+        SetFieldAsFloat(cDBF, "float", 77.7);
+        SetFieldAsString(cDBF, "birthday", "20170707");
+        SetFieldAsBoolean(cDBF, "bool", DBF_TRUE);
+        Post(cDBF);
+    }
+    gettimeofday(&tvEnd, NULL);
+    int useTime = tvEnd.tv_sec * ONE_SECOND + tvEnd.tv_usec - (tvStart.tv_sec * ONE_SECOND + tvStart.tv_usec); 
+    printf("Append 1000 use %d us\n", useTime);   
 
     printf("\n[start CloseDBF]\n");
     CloseDBF(cDBF);

@@ -16,6 +16,9 @@
 #ifndef CDBFSTRUCT_H
 #define CDBFSTRUCT_H
 
+#include <unistd.h>
+#include <fcntl.h>
+
 //DBF中支持的数据类型
 #define TYPE_NUMERIC 'N'        //整数、浮点小数
 #define TYPE_CHAR 'C'           //字符、字符串
@@ -107,6 +110,7 @@ typedef struct TCDBF
 {
     char *Path;                 //文件路径
     FILE *FHandle;              //文件描述符
+    struct flock FLock;         //文件锁控制信息
     DBFHead *Head;              //文件头信息
     DBFField *Fields;           //根据DBF实际的列数，动态申请对应个数的DBFField结构体
     DBFValue *Values;           //每一行的各个列的值
