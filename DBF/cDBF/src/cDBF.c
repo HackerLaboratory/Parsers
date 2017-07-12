@@ -45,11 +45,12 @@ CDBF *OpenDBF(char *filePath)
     if (NULL == cDBF){
         return NULL;
     }
+    memset(cDBF, '\0', sizeof(CDBF));
     cDBF->status = dsBrowse;
     //读写二进制文件方式打开DBF文件
     cDBF->FHandle = fopen(filePath, "rb+");
     if (NULL == cDBF->FHandle){
-        free(cDBF);
+        CloseDBF(cDBF);
         return NULL;
     }
     //申请内存保存DBF文件的目录
@@ -58,59 +59,43 @@ CDBF *OpenDBF(char *filePath)
     //申请存储文件头的内存
     cDBF->Head = malloc(sizeof(DBFHead));
     if (NULL == cDBF->Head){
-        free(cDBF->Path);
-        free(cDBF);
+        CloseDBF(cDBF);
         return NULL;
     }
     //读取文件头
     if (DBF_FAIL == ReadHead(cDBF)){
-        free(cDBF->Path);
-        free(cDBF->Head);
-        free(cDBF);
+        CloseDBF(cDBF);
         return NULL;
     }
     //判断文件列个数
     cDBF->FieldCount = (cDBF->Head->DataOffset - sizeof(DBFHead)) / sizeof(DBFField);
     if ((cDBF->FieldCount < MIN_FIELD_COUNT) || (cDBF->FieldCount > MAX_FIELD_COUNT)){
-        free(cDBF->Path);
-        free(cDBF->Head);
-        free(cDBF);
+        CloseDBF(cDBF);
         return NULL;
     }
     //申请存储列信息的内存
     cDBF->Fields = malloc(sizeof(DBFField) * cDBF->FieldCount);
     if (NULL == cDBF->Fields){
-        free(cDBF->Path);
-        free(cDBF->Head);
-        free(cDBF);
+        CloseDBF(cDBF);
         return NULL;
     }
     //申请行数据缓存
     cDBF->ValueBuf = malloc(cDBF->Head->RecSize);
     if (NULL == cDBF->ValueBuf){
-        free(cDBF->Path);
-        free(cDBF->Head);
-        free(cDBF->Fields);
-        free(cDBF);
+        CloseDBF(cDBF);
         return NULL;
     }
+    cDBF->deleted = ' ';
+    memset(cDBF->ValueBuf, '\0', cDBF->Head->RecSize);
     //读列信息
     if (DBF_FAIL == ReadFields(cDBF)){
-        free(cDBF->Path);
-        free(cDBF->Head);
-        free(cDBF->Fields);
-        free(cDBF->ValueBuf);
-        free(cDBF);
+        CloseDBF(cDBF);
         return NULL;
     }
 	//申请列值信息的存储空间
 	cDBF->Values = malloc(sizeof(DBFValue) * cDBF->FieldCount);
 	if (NULL == cDBF->Values){
-        free(cDBF->Path);
-        free(cDBF->Head);
-        free(cDBF->Fields);
-        free(cDBF->ValueBuf);
-        free(cDBF);
+        CloseDBF(cDBF);
         return NULL;
     }
     //定位到第一行
@@ -140,12 +125,24 @@ int CloseDBF(CDBF *cDBF)
 {
     if (NULL != cDBF){
         //OpenDBF中逐层申请内存，在Close中逐层释放内存、释放文件句柄
-        free(cDBF->Path);
-        fclose(cDBF->FHandle);
-        free(cDBF->Head);
-        free(cDBF->Fields);
-        free(cDBF->ValueBuf);
-		free(cDBF->Values);
+        if(NULL != cDBF->Path){
+            free(cDBF->Path);
+        }
+        if(NULL != cDBF->FHandle){
+            fclose(cDBF->FHandle);
+        }
+        if(NULL != cDBF->Head){
+            free(cDBF->Head);
+        }
+        if(NULL != cDBF->Fields){
+            free(cDBF->Fields);
+        }
+        if(NULL != cDBF->ValueBuf){
+            free(cDBF->ValueBuf);
+        }
+        if(NULL != cDBF->Values){
+            free(cDBF->Values);
+        }
         free(cDBF);
         cDBF = NULL;
         return DBF_SUCCESS;
@@ -264,7 +261,6 @@ int Go(CDBF *cDBF, int rowNo)
         #ifdef DEBUG
         printf("Debug Go fread Error, readCount = %d\n", readCount);
         #endif
-
         return DBF_FAIL;
     }
     //然后将DBF文件中该列的数据读到内存中
@@ -280,7 +276,6 @@ int Go(CDBF *cDBF, int rowNo)
             #ifdef DEBUG
             printf("Debug Go fread Error, readCount = %d\n", readCount);
             #endif
-
             return DBF_FAIL;
         }
         //将字符串最后一位设置为NULL
@@ -295,7 +290,7 @@ int Go(CDBF *cDBF, int rowNo)
     }
     //更新cDBF的记录信息
     cDBF->RecNo = rowNo;
-    return DBF_SUCCESS;
+    return cDBF->RecNo;
 }
 
 
@@ -328,6 +323,12 @@ int Edit(CDBF *cDBF)
 int Append(CDBF *cDBF)
 {
     cDBF->status = dsAppend;
+    //先将列的内存值清为空格
+    cDBF->deleted = ' ';
+    int i = 0;
+    for(i=0; i<cDBF->FieldCount; i++){
+        memset(cDBF->Values[i].ValueBuf, ' ', sizeof(cDBF->Values[i].ValueBuf));
+    }
     return DBF_SUCCESS;
 }
 
@@ -360,13 +361,22 @@ int Delete(CDBF *cDBF)
 *******************************************************************************/
 int Post(CDBF *cDBF)
 {
+    //列数据先写入内存缓冲区
+    int i = 0;
+    void *dest = cDBF->ValueBuf;
+    memcpy(dest, &cDBF->deleted, 1);
+    dest = dest + 1;
+    for(i=0; i<cDBF->FieldCount; i++){
+        memcpy(dest, cDBF->Values[i].ValueBuf, cDBF->Fields[i].Width);
+        dest = dest + cDBF->Fields[i].Width;
+    }
     //编辑结果保存到磁盘
     int Offset = 0;
     if(dsEdit == cDBF->status){
         Offset = cDBF->Head->DataOffset + (cDBF->Head->RecSize * (cDBF->RecNo - 1));
     }
     else if(dsAppend == cDBF->status){
-        Offset = cDBF->Head->DataOffset + (cDBF->Head->RecSize * (cDBF->Head->RecCount - 1));
+        Offset = cDBF->Head->DataOffset + (cDBF->Head->RecSize * (cDBF->Head->RecCount));
         cDBF->Head->RecCount ++;
     }
     if(0 != fseek(cDBF->FHandle, Offset, SEEK_SET)){
@@ -508,6 +518,7 @@ char *GetFieldAsString(CDBF *cDBF, char *fieldName)
     }
     
     //字符串类型后面会用空格补齐，需要去除空格
+    //int、float在前面补空格，可以不去除这种空格，不影响atoi、atof的转换
     int i = 0;
     for(i=cDBF->Fields[index].Width-1; i>=0; i--){
         if(' ' != cDBF->Values[index].ValueBuf[i]){
@@ -527,14 +538,14 @@ char *GetFieldAsString(CDBF *cDBF, char *fieldName)
     * fieldName, 列名
     * value, 设置的值
 * Output     :
-* Return     : -1, 设置失败; 1-设置成功
+* Return     : -1-设置失败; 1-设置成功
 * Others     :
 *******************************************************************************/
 int SetFieldAsBoolean(CDBF *cDBF, char *fieldName, unsigned char value)
 {
     int index = GetIndexByName(cDBF, fieldName);
     if(DBF_FAIL == index){
-        return -1;
+        return DBF_FAIL;
     }
     char boolValue;
     if(DBF_TRUE == value){
@@ -563,9 +574,13 @@ int SetFieldAsInteger(CDBF *cDBF, char *fieldName, int value)
 {
     int index = GetIndexByName(cDBF, fieldName);
     if(DBF_FAIL == index){
-        return -1;
+        return DBF_FAIL;
     }
-    
+    //int转成string，按DBF格式要求前面不足的位补空格
+    //sprintf(s, "%*d", 2, 100);并不会截位，还是100，所以需要考虑设置值超长的问题！
+    //这里不考虑截位，ValueBuf是256位，int转成string后，不会超过256位
+    //后续将Values的ValueBuf拷贝到行缓存中，会按照Width拷贝，会自动截位！
+    sprintf(cDBF->Values[index].ValueBuf, "%*d", cDBF->Fields[index].Width, value);
     return DBF_SUCCESS;
 }
 
@@ -583,6 +598,14 @@ int SetFieldAsInteger(CDBF *cDBF, char *fieldName, int value)
 *******************************************************************************/
 int SetFieldAsFloat(CDBF *cDBF, char *fieldName, double value)
 {
+    int index = GetIndexByName(cDBF, fieldName);
+    if(DBF_FAIL == index){
+        return DBF_FAIL;
+    }
+    //float转成string，按DBF格式要求前面不足的位补空格
+    //这里不考虑截位，ValueBuf是256位，int转成string后，不会超过256位
+    //后续将Values的ValueBuf拷贝到行缓存中，会按照Width拷贝，会自动截位！
+    sprintf(cDBF->Values[index].ValueBuf, "%*.*f", cDBF->Fields[index].Width, cDBF->Fields[index].Scale, value);
     return DBF_SUCCESS;
 }
 
@@ -600,7 +623,25 @@ int SetFieldAsFloat(CDBF *cDBF, char *fieldName, double value)
 *******************************************************************************/
 int SetFieldAsString(CDBF *cDBF, char *fieldName, char *value)
 {
-    
+    int index = GetIndexByName(cDBF, fieldName);
+    if(DBF_FAIL == index){
+        return DBF_FAIL;
+    }
+    //string类型写到DBF中要求后面补空格，且不用'\0'结尾
+    //比如5位，写入"123"，不应该是'1','2','3','\0'，而应该是'1','2','3',' ',' '
+    if(strlen(value) >= cDBF->Fields[index].Width){
+        //如果value超长，会在这里自动截位
+        memcpy(cDBF->Values[index].ValueBuf, value, cDBF->Fields[index].Width);
+    }
+    else{
+        memcpy(cDBF->Values[index].ValueBuf, value, strlen(value));
+        int i = 0;
+        //字符串不足的，后面补空格
+        for(i=strlen(value); i<cDBF->Fields[index].Width; i++){
+            cDBF->Values[index].ValueBuf[i] = ' ';
+        }
+    }
+        
     return DBF_SUCCESS;
 }
 
@@ -619,6 +660,7 @@ int ReadHead(CDBF *cDBF)
 {
     /*先实现功能，这里需要加锁，后续实现！*/
     
+    //先定位到文件头
     if(0 != fseek(cDBF->FHandle, 0, SEEK_SET)){
         #ifdef DEBUG
         printf("Debug ReadHead fseek Error");
@@ -654,13 +696,14 @@ int ReadHead(CDBF *cDBF)
 ----------------------------------------------------------------------------*/
 int WriteHead(CDBF *cDBF)
 {
+    //先定位到文件头
     if(0 != fseek(cDBF->FHandle, 0, SEEK_SET)){
         #ifdef DEBUG
         printf("Debug WriteHead fseek Error");
         #endif
         return DBF_FAIL;
     }
-
+    //头数据写到磁盘中
     int writeCount = fwrite(cDBF->Head, sizeof(DBFHead), 1, cDBF->FHandle);
     if(1 != writeCount){
         #ifdef DEBUG
@@ -685,6 +728,7 @@ int WriteHead(CDBF *cDBF)
 ----------------------------------------------------------------------------*/
 int ReadFields(CDBF *cDBF)
 {
+    //先定位到列信息偏移地址
     if(0 != fseek(cDBF->FHandle, sizeof(DBFHead), SEEK_SET)){
         #ifdef DEBUG
         printf("Debug ReadFields fseek Error");

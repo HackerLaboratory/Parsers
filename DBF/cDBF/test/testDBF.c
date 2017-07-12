@@ -63,10 +63,17 @@ int main()
     printf("name = %s, float values = %f\n", "job", GetFieldAsFloat(cDBF, "job"));
     printf("name = %s, int values = %d\n", "job", GetFieldAsInteger(cDBF, "job"));
 
+    printf("\n[test Post]\n");
+    Append(cDBF);
+    SetFieldAsString(cDBF, "name", "test");
+    SetFieldAsInteger(cDBF, "age", 777);
+    SetFieldAsFloat(cDBF, "float", 77.7);
+    SetFieldAsString(cDBF, "birthday", "20170707");
+    SetFieldAsBoolean(cDBF, "bool", DBF_TRUE);
+    Post(cDBF);
+    
     printf("\n[start CloseDBF]\n");
     CloseDBF(cDBF);
-
-    //测试性能
 
     printf("\n[test Finish]\n\n");
     
