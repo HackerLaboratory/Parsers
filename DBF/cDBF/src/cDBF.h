@@ -15,28 +15,28 @@
 
 #include "cDBFStruct.h"
 
-CDBF* OpenDBF(char* filePath);
-int CloseDBF(CDBF* cDBF);
-int First(CDBF* cDBF);
-int Last(CDBF* cDBF);
-int Next(CDBF* cDBF);
-int Prior(CDBF* cDBF);
-int Go(CDBF* cDBF, int rowNo);
-int Edit(CDBF* cDBF);
-int Append(CDBF* cDBF);
-int Delete(CDBF* cDBF);
-int Post(CDBF* cDBF);
-int Zap(CDBF* cDBF);
-int Fresh(CDBF* cDBF);
-int GetRecNo(CDBF* cDBF);
+CDBF *OpenDBF(char *filePath);
+int CloseDBF(CDBF *cDBF);
+int First(CDBF *cDBF);
+int Last(CDBF *cDBF);
+int Next(CDBF *cDBF);
+int Prior(CDBF *cDBF);
+int Go(CDBF *cDBF, int rowNo);
+int Edit(CDBF *cDBF);
+int Append(CDBF *cDBF);
+int Delete(CDBF *cDBF);
+int Post(CDBF *cDBF);
+int Zap(CDBF *cDBF);
+int Fresh(CDBF *cDBF);
+int GetRecNo(CDBF *cDBF);
 
-unsigned char GetFieldAsBoolean(CDBF* cDBF, char* fieldName);
-int GetFieldAsInteger(CDBF* cDBF, char* fieldName);
-double GetFieldAsFloat(CDBF* cDBF, char* fieldName);
-char* GetFieldAsString(CDBF* cDBF, char* fieldName);
-int SetFieldAsBoolean(CDBF* cDBF, char* fieldName, unsigned char value);
-int SetFieldAsInteger(CDBF* cDBF, char* fieldName, int value);
-int SetFieldAsFloat(CDBF* cDBF, char* fieldName, double value);
-int SetFieldAsString(CDBF* cDBF, char* fieldName, char* value);
+unsigned char GetFieldAsBoolean(CDBF *cDBF, char *fieldName);
+int GetFieldAsInteger(CDBF *cDBF, char *fieldName);
+double GetFieldAsFloat(CDBF *cDBF, char *fieldName);
+char* GetFieldAsString(CDBF *cDBF, char *fieldName);
+int SetFieldAsBoolean(CDBF *cDBF, char *fieldName, unsigned char value);
+int SetFieldAsInteger(CDBF *cDBF, char *fieldName, int value);
+int SetFieldAsFloat(CDBF *cDBF, char *fieldName, double value);
+int SetFieldAsString(CDBF *cDBF, char *fieldName, char *value);
 
 #endif

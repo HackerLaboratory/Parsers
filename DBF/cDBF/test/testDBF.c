@@ -3,11 +3,11 @@
 
 int main()
 {
-    int i=0;
+    int i = 0;
     printf("[test Start]\n");
 
     printf("\n[start OpenDBF]\n");
-    CDBF* cDBF = OpenDBF("./testDbf-dBaseIII.dbf");
+    CDBF *cDBF = OpenDBF("./testDbf-dBaseIII.dbf");
     if (NULL == cDBF){
         printf("OpenDBF Error\n");
         return -1;
@@ -65,6 +65,8 @@ int main()
 
     printf("\n[start CloseDBF]\n");
     CloseDBF(cDBF);
+
+    //测试性能
 
     printf("\n[test Finish]\n\n");
     

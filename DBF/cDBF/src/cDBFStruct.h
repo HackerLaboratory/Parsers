@@ -99,17 +99,18 @@ typedef struct TDBFField
 typedef struct FDBFValue
 {
     char ValueBuf[256];         //存储对应的值
-    DBFField* Field;            //存储对应的列头信息
+    DBFField *Field;            //存储对应的列头信息
 }DBFValue;
 
 //CDBF对象，封装DBF的所有信息
 typedef struct TCDBF
 {
-    char* Path;                 //文件路径
-    FILE* FHandle;              //文件描述符
-    DBFHead* Head;              //文件头信息
-    DBFField* Fields;           //根据DBF实际的列数，动态申请对应个数的DBFField结构体
-    DBFValue* Values;           //每一行的各个列的值
+    char *Path;                 //文件路径
+    FILE *FHandle;              //文件描述符
+    DBFHead *Head;              //文件头信息
+    DBFField *Fields;           //根据DBF实际的列数，动态申请对应个数的DBFField结构体
+    DBFValue *Values;           //每一行的各个列的值
+    char deleted;               //DBF每行第一个记录是删除标记
     int FieldCount;             //列个数
     int RecNo;                  //CDBF当前指向的行号
     DBFStatus status;           //DBF编辑状态
