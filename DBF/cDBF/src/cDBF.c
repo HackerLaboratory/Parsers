@@ -22,6 +22,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
 #include "cDBF.h"
 #include "cHash.h"
 
@@ -384,14 +385,14 @@ int Post(CDBF *cDBF)
     }
     if(0 != fseek(cDBF->FHandle, Offset, SEEK_SET)){
         #ifdef DEBUG
-        printf("Debug Post fseek Error");
+        printf("Debug Post fseek Error\n");
         #endif
         return DBF_FAIL;
     }
     int writeCount = fwrite(cDBF->ValueBuf, cDBF->Head->RecSize, 1, cDBF->FHandle);
     if(1 != writeCount){
         #ifdef DEBUG
-        printf("Debug Post fwrite Error");
+        printf("Debug Post fwrite Error\n");
         #endif
         return DBF_FAIL;
     }
@@ -670,7 +671,7 @@ int ReadHead(CDBF *cDBF)
     //先定位到文件头
     if(0 != fseek(cDBF->FHandle, 0, SEEK_SET)){
         #ifdef DEBUG
-        printf("Debug ReadHead fseek Error");
+        printf("Debug ReadHead fseek Error\n");
         #endif
         return DBF_FAIL;
     }
@@ -706,10 +707,22 @@ int WriteHead(CDBF *cDBF)
     //先定位到文件头
     if(0 != fseek(cDBF->FHandle, 0, SEEK_SET)){
         #ifdef DEBUG
-        printf("Debug WriteHead fseek Error");
+        printf("Debug WriteHead fseek Error\n");
         #endif
         return DBF_FAIL;
     }
+    //获取年月日信息
+    time_t timep;
+    struct tm *p;
+    time(&timep);
+    p = gmtime(&timep);
+    //这里有int到unsigned char的转换，因为这些值不会超过unsigned char的范围，所以不会有问题
+    cDBF->Head->Year = (unsigned char)p->tm_year;  //当前年-1990
+    cDBF->Head->Month = (unsigned char)p->tm_mon;  //0~11
+    cDBF->Head->Day = (unsigned char)p->tm_mday;   //1-31
+    #ifdef DEBUG
+    printf("Debug WriteHead year=%d, month=%d, day=%d\n", cDBF->Head->Year, cDBF->Head->Month, cDBF->Head->Day);
+    #endif
     //头数据写到磁盘中
     int writeCount = fwrite(cDBF->Head, sizeof(DBFHead), 1, cDBF->FHandle);
     if(1 != writeCount){
@@ -738,7 +751,7 @@ int ReadFields(CDBF *cDBF)
     //先定位到列信息偏移地址
     if(0 != fseek(cDBF->FHandle, sizeof(DBFHead), SEEK_SET)){
         #ifdef DEBUG
-        printf("Debug ReadFields fseek Error");
+        printf("Debug ReadFields fseek Error\n");
         #endif
         return DBF_FAIL;
     }
