@@ -65,13 +65,23 @@ int main()
 
     printf("\n[test Post]\n");
     Append(cDBF);
-    SetFieldAsString(cDBF, "name", "test");
+    SetFieldAsString(cDBF, "name", "post");
     SetFieldAsInteger(cDBF, "age", 777);
     SetFieldAsFloat(cDBF, "float", 77.7);
     SetFieldAsString(cDBF, "birthday", "20170707");
     SetFieldAsBoolean(cDBF, "bool", DBF_TRUE);
     Post(cDBF);
     
+    printf("\n[test Edit]\n");
+    Go(cDBF, 1);
+    Edit(cDBF);
+    SetFieldAsString(cDBF, "name", "editeditediteditediteditediteditediteditediteediteditediteditditeditedit");
+    SetFieldAsInteger(cDBF, "age", 777);
+    SetFieldAsFloat(cDBF, "float", 77.7);
+    SetFieldAsString(cDBF, "birthday", "201707072017");
+    SetFieldAsBoolean(cDBF, "bool", DBF_TRUE);
+    Post(cDBF);
+
     printf("\n[start CloseDBF]\n");
     CloseDBF(cDBF);
 
