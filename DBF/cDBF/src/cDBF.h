@@ -33,7 +33,7 @@ int GetRecNo(CDBF *cDBF);
 unsigned char GetFieldAsBoolean(CDBF *cDBF, char *fieldName);
 int GetFieldAsInteger(CDBF *cDBF, char *fieldName);
 double GetFieldAsFloat(CDBF *cDBF, char *fieldName);
-char* GetFieldAsString(CDBF *cDBF, char *fieldName);
+char *GetFieldAsString(CDBF *cDBF, char *fieldName);
 int SetFieldAsBoolean(CDBF *cDBF, char *fieldName, unsigned char value);
 int SetFieldAsInteger(CDBF *cDBF, char *fieldName, int value);
 int SetFieldAsFloat(CDBF *cDBF, char *fieldName, double value);

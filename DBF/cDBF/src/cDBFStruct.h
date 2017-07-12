@@ -110,6 +110,7 @@ typedef struct TCDBF
     DBFHead *Head;              //文件头信息
     DBFField *Fields;           //根据DBF实际的列数，动态申请对应个数的DBFField结构体
     DBFValue *Values;           //每一行的各个列的值
+    char *ValueBuf;             //每行数据的内存缓存
     char deleted;               //DBF每行第一个记录是删除标记
     int FieldCount;             //列个数
     int RecNo;                  //CDBF当前指向的行号

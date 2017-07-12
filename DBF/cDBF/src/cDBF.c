@@ -23,6 +23,7 @@
 #include "cHash.h"
 
 int ReadHead(CDBF *cDBF);
+int WriteHead(CDBF *cDBF);
 int ReadFields(CDBF *cDBF);
 int LockRow(CDBF *cDBF, int rowNo);
 int UnLockRow(CDBF *cDBF, int rowNo);
@@ -84,11 +85,21 @@ CDBF *OpenDBF(char *filePath)
         free(cDBF);
         return NULL;
     }
+    //申请行数据缓存
+    cDBF->ValueBuf = malloc(cDBF->Head->RecSize);
+    if (NULL == cDBF->ValueBuf){
+        free(cDBF->Path);
+        free(cDBF->Head);
+        free(cDBF->Fields);
+        free(cDBF);
+        return NULL;
+    }
     //读列信息
     if (DBF_FAIL == ReadFields(cDBF)){
         free(cDBF->Path);
         free(cDBF->Head);
         free(cDBF->Fields);
+        free(cDBF->ValueBuf);
         free(cDBF);
         return NULL;
     }
@@ -98,6 +109,7 @@ CDBF *OpenDBF(char *filePath)
         free(cDBF->Path);
         free(cDBF->Head);
         free(cDBF->Fields);
+        free(cDBF->ValueBuf);
         free(cDBF);
         return NULL;
     }
@@ -132,6 +144,7 @@ int CloseDBF(CDBF *cDBF)
         fclose(cDBF->FHandle);
         free(cDBF->Head);
         free(cDBF->Fields);
+        free(cDBF->ValueBuf);
 		free(cDBF->Values);
         free(cDBF);
         cDBF = NULL;
@@ -348,9 +361,29 @@ int Delete(CDBF *cDBF)
 int Post(CDBF *cDBF)
 {
     //编辑结果保存到磁盘
-    
+    int Offset = 0;
+    if(dsEdit == cDBF->status){
+        Offset = cDBF->Head->DataOffset + (cDBF->Head->RecSize * (cDBF->RecNo - 1));
+    }
+    else if(dsAppend == cDBF->status){
+        Offset = cDBF->Head->DataOffset + (cDBF->Head->RecSize * (cDBF->Head->RecCount - 1));
+        cDBF->Head->RecCount ++;
+    }
+    if(0 != fseek(cDBF->FHandle, Offset, SEEK_SET)){
+        #ifdef DEBUG
+        printf("Debug Post fseek Error");
+        #endif
+        return DBF_FAIL;
+    }
+    int writeCount = fwrite(cDBF->ValueBuf, cDBF->Head->RecSize, 1, cDBF->FHandle);
+    if(1 != writeCount){
+        #ifdef DEBUG
+        printf("Debug Post fwrite Error");
+        #endif
+        return DBF_FAIL;
+    }
     //更新文件头中记录数信息
-    
+    WriteHead(cDBF);
     //修改DBF文件编辑状态
     cDBF->status = dsBrowse;
     return DBF_SUCCESS;
@@ -429,7 +462,7 @@ unsigned char GetFieldAsBoolean(CDBF *cDBF, char *fieldName)
 *******************************************************************************/
 int GetFieldAsInteger(CDBF *cDBF, char *fieldName)
 {
-    char* str = GetFieldAsString(cDBF, fieldName);
+    char *str = GetFieldAsString(cDBF, fieldName);
     return atoi(str);
 }
 
@@ -446,7 +479,7 @@ int GetFieldAsInteger(CDBF *cDBF, char *fieldName)
 *******************************************************************************/
 double GetFieldAsFloat(CDBF *cDBF, char *fieldName)
 {
-    char* str = GetFieldAsString(cDBF, fieldName);
+    char *str = GetFieldAsString(cDBF, fieldName);
     
     //注意，该函数需要包含stdlib.h
     //不包含stdlib.h也能编译通过，但是总是返回0.0
@@ -467,7 +500,7 @@ double GetFieldAsFloat(CDBF *cDBF, char *fieldName)
     * 返回字符串数组指针，所以若调用者需长久使用字符串，要申请字符数组进行保存
 * Others     :
 *******************************************************************************/
-char* GetFieldAsString(CDBF *cDBF, char *fieldName)
+char *GetFieldAsString(CDBF *cDBF, char *fieldName)
 {
     int index = GetIndexByName(cDBF, fieldName);
     if(DBF_FAIL == index){
@@ -585,7 +618,13 @@ int SetFieldAsString(CDBF *cDBF, char *fieldName, char *value)
 int ReadHead(CDBF *cDBF)
 {
     /*先实现功能，这里需要加锁，后续实现！*/
-
+    
+    if(0 != fseek(cDBF->FHandle, 0, SEEK_SET)){
+        #ifdef DEBUG
+        printf("Debug ReadHead fseek Error");
+        #endif
+        return DBF_FAIL;
+    }
     //fread从cDBF->FHandle读1个sizeof(DBFHead)字节的数据放到cDBF->Head中，fread会自动移动文件指针
     int readCount = fread(cDBF->Head, sizeof(DBFHead), 1, cDBF->FHandle);
     if (1 != readCount){
@@ -603,6 +642,36 @@ int ReadHead(CDBF *cDBF)
     return DBF_SUCCESS;
 }
 
+/*----------------------------------------------------------------------------
+* Function   : WriteHead
+* Description: 将内存中的DBF头信息更新到磁盘
+* Input      :
+    * cDBF, OpenDBF返回的CDBF结构体指针  
+* Output     :
+* Return     :
+    * 是否更新成功, -1:更新失败; 1:更新成功
+* Others     :
+----------------------------------------------------------------------------*/
+int WriteHead(CDBF *cDBF)
+{
+    if(0 != fseek(cDBF->FHandle, 0, SEEK_SET)){
+        #ifdef DEBUG
+        printf("Debug WriteHead fseek Error");
+        #endif
+        return DBF_FAIL;
+    }
+
+    int writeCount = fwrite(cDBF->Head, sizeof(DBFHead), 1, cDBF->FHandle);
+    if(1 != writeCount){
+        #ifdef DEBUG
+        printf("Debug WriteHead fwrite Error");
+        #endif
+        return DBF_FAIL;
+    }
+    
+    return DBF_SUCCESS; 
+}
+
 
 /*----------------------------------------------------------------------------
 * Function   : ReadFields
@@ -616,6 +685,12 @@ int ReadHead(CDBF *cDBF)
 ----------------------------------------------------------------------------*/
 int ReadFields(CDBF *cDBF)
 {
+    if(0 != fseek(cDBF->FHandle, sizeof(DBFHead), SEEK_SET)){
+        #ifdef DEBUG
+        printf("Debug ReadFields fseek Error");
+        #endif
+        return DBF_FAIL;
+    }
     //将列信息从磁盘读取到内存
     int readCount = fread(cDBF->Fields, sizeof(DBFField), cDBF->FieldCount, cDBF->FHandle);
     if (readCount != cDBF->FieldCount){
