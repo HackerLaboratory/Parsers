@@ -59,6 +59,10 @@ CDBF *OpenDBF(char *filePath)
     }
     //申请内存保存DBF文件的目录
     cDBF->Path = malloc(strlen(filePath) + 1);
+    if(NULL == cDBF->Path){
+        CloseDBF(cDBF);
+        return NULL;
+    }
     strcpy(cDBF->Path, filePath);
     //申请存储文件头的内存
     cDBF->Head = malloc(sizeof(DBFHead));
@@ -111,7 +115,6 @@ CDBF *OpenDBF(char *filePath)
             return NULL;
         }
     }
-
     return cDBF;
 }
 
@@ -367,12 +370,12 @@ int Post(CDBF *cDBF)
 {
     //列数据先写入内存缓冲区
     int i = 0;
-    void *dest = cDBF->ValueBuf;
-    memcpy(dest, &cDBF->deleted, 1);
-    dest = dest + 1;
+    void *RowData = cDBF->ValueBuf;
+    memcpy(RowData, &cDBF->deleted, 1);
+    RowData = RowData + 1;
     for(i=0; i<cDBF->FieldCount; i++){
-        memcpy(dest, cDBF->Values[i].ValueBuf, cDBF->Fields[i].Width);
-        dest = dest + cDBF->Fields[i].Width;
+        memcpy(RowData, cDBF->Values[i].ValueBuf, cDBF->Fields[i].Width);
+        RowData = RowData + cDBF->Fields[i].Width;
     }
     //编辑结果保存到磁盘
     int Offset = 0;
@@ -397,7 +400,9 @@ int Post(CDBF *cDBF)
         return DBF_FAIL;
     }
     //更新文件头中记录数信息
-    WriteHead(cDBF);
+    if(DBF_FAIL == WriteHead(cDBF)){
+        return DBF_FAIL;
+    }
     //修改DBF文件编辑状态
     cDBF->status = dsBrowse;
     return DBF_SUCCESS;
@@ -419,11 +424,14 @@ int Zap(CDBF *cDBF)
     //首先清空文件
     //fileno通过fopen的文件描述符得到对应open的文件描述符
     int fd = fileno(cDBF->FHandle);
-    ftruncate(fd, cDBF->Head->DataOffset);
+    if(0 != ftruncate(fd, cDBF->Head->DataOffset)){
+        return DBF_FAIL;
+    }
     //更新文件头中记录数信息
     cDBF->Head->RecCount = 0;
-    WriteHead(cDBF);
-
+    if(DBF_FAIL == WriteHead(cDBF)){
+        return DBF_FAIL;
+    }
     return DBF_SUCCESS;
 }
 
@@ -649,7 +657,6 @@ int SetFieldAsString(CDBF *cDBF, char *fieldName, char *value)
             cDBF->Values[index].ValueBuf[i] = ' ';
         }
     }
-        
     return DBF_SUCCESS;
 }
 
@@ -681,14 +688,11 @@ int ReadHead(CDBF *cDBF)
         #ifdef DEBUG
         printf("Debug ReadHead fread Error, readCount = %d\n", readCount);
         #endif
-
         return DBF_FAIL;
     }
-
     #ifdef DEBUG
     printf("Debug ReadHead RecCount = %d\n", cDBF->Head->RecCount);
     #endif
-
     return DBF_SUCCESS;
 }
 
@@ -728,7 +732,6 @@ int WriteHead(CDBF *cDBF)
         #endif
         return DBF_FAIL;
     }
-    
     return DBF_SUCCESS; 
 }
 
@@ -758,7 +761,6 @@ int ReadFields(CDBF *cDBF)
         #ifdef DEBUG
         printf("Debug ReadFields fread Error, readCount = %d, FieldCount = %d\n", readCount, cDBF->FieldCount);
         #endif
-
         return DBF_FAIL;
     }
 
@@ -770,7 +772,6 @@ int ReadFields(CDBF *cDBF)
         printf("Debug ReadFields %s\n", cDBF->Fields[i].FieldName);
     }
     #endif
-
     return DBF_SUCCESS;
 }
 
@@ -838,4 +839,3 @@ int GetIndexByName(CDBF *cDBF, char *FieldName)
     }
     return DBF_FAIL;    
 }
-
