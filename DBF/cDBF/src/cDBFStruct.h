@@ -98,6 +98,9 @@ typedef struct TDBFField
     char Reserved[14];          //保留字节
 }DBFField;
 
+//取消自定义的结构体对齐方式
+#pragma pack()
+
 //DBF行每个列结构
 typedef struct FDBFValue
 {

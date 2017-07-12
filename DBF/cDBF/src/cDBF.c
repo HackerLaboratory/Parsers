@@ -720,9 +720,6 @@ int WriteHead(CDBF *cDBF)
     cDBF->Head->Year = (unsigned char)p->tm_year;  //当前年-1990
     cDBF->Head->Month = (unsigned char)p->tm_mon;  //0~11
     cDBF->Head->Day = (unsigned char)p->tm_mday;   //1-31
-    #ifdef DEBUG
-    printf("Debug WriteHead year=%d, month=%d, day=%d\n", cDBF->Head->Year, cDBF->Head->Month, cDBF->Head->Day);
-    #endif
     //头数据写到磁盘中
     int writeCount = fwrite(cDBF->Head, sizeof(DBFHead), 1, cDBF->FHandle);
     if(1 != writeCount){
